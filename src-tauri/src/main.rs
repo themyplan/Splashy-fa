@@ -29,7 +29,10 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        // NOTE: no updater plugin — it was removed in 1.0.7-2. Registering
+        // tauri_plugin_updater without a `pubkey` in tauri.conf.json made
+        // the app panic on startup ("missing field `pubkey`"). Auto-update
+        // is off for this fork; new versions come from GitHub Releases.
         .plugin(tauri_plugin_process::init())
         .on_menu_event(|app, event| {
             match event.id.as_ref() {

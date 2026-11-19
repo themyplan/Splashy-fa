@@ -45,5 +45,4 @@ jobs:
         with:
           name: splashy-windows-fa
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
