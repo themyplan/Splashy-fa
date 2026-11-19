@@ -132,6 +132,14 @@ pub async fn restore_previous_wallpaper() -> Result<String, String> {
         return Err("No previous wallpaper to restore".to_string());
     }
 
+    // A photo the user marked "never" must not come back through
+    // restore, either: it never becomes the wallpaper again.
+    if let Some(meta) = read_meta(&prev_meta) {
+        if crate::never_list::is_never(&meta.photo_id) {
+            return Err("That photo is on your never list".to_string());
+        }
+    }
+
     let tmp_img  = current_dir.join("swap_tmp_wallpaper.jpg");
     let tmp_meta = current_dir.join("swap_tmp_wallpaper_meta.json");
     let _ = std::fs::remove_file(&tmp_img);

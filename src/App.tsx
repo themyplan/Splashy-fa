@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { View, AppSettings } from "./types";
 import Sidebar from "./components/Sidebar";
 import ApiKeySetup from "./components/ApiKeySetup";
@@ -15,6 +16,7 @@ import RelatedView from "./views/RelatedView";
 import SettingsView from "./views/SettingsView";
 import TitleBar from "./components/TitleBar";
 import UpdatePrompt from "./components/UpdatePrompt";
+import CloseConfirmModal from "./components/CloseConfirmModal";
 import { applyLayoutDirection } from "./i18n";
 
 function computeBrightness(url: string): Promise<number> {
@@ -115,6 +117,30 @@ export default function App() {
   const [status, setStatus] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const [refreshKey] = useState(0);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // The backend emits "show-close-confirm" when the close button is
+  // pressed while close_behavior is "ask" (see main.rs).
+  useEffect(() => {
+    const unlisten = listen("show-close-confirm", () => {
+      setShowCloseConfirm(true);
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // A choice from the close-confirm dialog. With "remember" the choice
+  // is saved as close_behavior, so the dialog stops appearing.
+  const handleCloseChoice = async (action: "minimize" | "exit", remember: boolean) => {
+    setShowCloseConfirm(false);
+    try {
+      if (remember) await invoke("set_close_behavior", { behavior: action });
+    } catch { /* one-off choice still applies below */ }
+    if (action === "minimize") {
+      await getCurrentWindow().hide();
+    } else {
+      await invoke("quit_app");
+    }
+  };
 
   const handleRefresh = async () => {
     setLoading(true);
@@ -261,6 +287,14 @@ useEffect(() => {
       </div>
 
       <UpdatePrompt />
+
+      {showCloseConfirm && (
+        <CloseConfirmModal
+          onMinimize={(remember) => handleCloseChoice("minimize", remember)}
+          onExit={(remember) => handleCloseChoice("exit", remember)}
+          onCancel={() => setShowCloseConfirm(false)}
+        />
+      )}
     </div>
   );
 }

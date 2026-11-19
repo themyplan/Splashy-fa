@@ -4,16 +4,17 @@ import { useTranslation } from "react-i18next";
 import {
   CollectionSummary, UserSummary, TopicWithEnabled,
   QuerySummary, ColorSource, RelatedSourceSummary, TimeGroup,
+  FeaturedSource,
 } from "../types";
 import {
   IconCollections, IconUsers, IconTopics,
-  IconSearch, IconPalette, IconRelated,
+  IconSearch, IconPalette, IconRelated, IconFeatured,
 } from "./icons";
 import Toggle from "./Toggle";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
-type TargetKind = "collection" | "user" | "topic" | "query" | "color" | "related";
+type TargetKind = "collection" | "user" | "topic" | "query" | "color" | "related" | "featured";
 
 interface UnifiedTarget {
   kind: TargetKind;
@@ -33,6 +34,7 @@ function getTargetId(kind: TargetKind, id: string): string {
     case "query":      return id;
     case "color":      return `color_${id}`;
     case "related":    return `related_${id}`;
+    case "featured":   return "featured";
   }
 }
 
@@ -283,12 +285,13 @@ export default function ActiveTargetsModal({ onClose }: Props) {
     query:      { label: t("activeTargets.kindQuery"),      Icon: IconSearch },
     color:      { label: t("activeTargets.kindColor"),      Icon: IconPalette },
     related:    { label: t("activeTargets.kindRelated"),    Icon: IconRelated },
+    featured:   { label: t("activeTargets.kindFeatured"),   Icon: IconFeatured },
   };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [collections, users, topics, queries, colors, related, groups] = await Promise.all([
+      const [collections, users, topics, queries, colors, related, groups, featured] = await Promise.all([
         invoke<CollectionSummary[]>("list_collections"),
         invoke<UserSummary[]>("list_users"),
         invoke<TopicWithEnabled[]>("list_topics"),
@@ -296,6 +299,7 @@ export default function ActiveTargetsModal({ onClose }: Props) {
         invoke<ColorSource[]>("list_colors"),
         invoke<RelatedSourceSummary[]>("list_related_sources"),
         invoke<TimeGroup[]>("get_time_groups"),
+        invoke<FeaturedSource>("get_featured_source"),
       ]);
 
       setTimeGroups(groups);
@@ -325,9 +329,20 @@ export default function ActiveTargetsModal({ onClose }: Props) {
           kind: "related" as const, id: r.photo_id, targetId: getTargetId("related", r.photo_id),
           label: t("related.by", { name: r.author_name }), sublabel: `@${r.author_username}`,
         })),
+        // Featured is a single on/off switch, not a list — it is always
+        // shown as a card (off by default), so the user can turn it on
+        // here. Its toggle state starts disabled when the backend says
+        // it is off, so the card renders dimmed like other off sources.
+        {
+          kind: "featured" as const, id: "featured", targetId: "featured",
+          label: t("activeTargets.featuredDesc"),
+        },
       ];
 
       setTargets(unified);
+      // The modal's toggle state assumes listed targets are enabled;
+      // featured is the exception — it is listed while off by default.
+      setDisabledIds(featured.enabled ? new Set() : new Set(["featured:featured"]));
     } finally {
       setLoading(false);
     }

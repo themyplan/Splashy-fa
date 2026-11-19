@@ -97,6 +97,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const [wallpaperSaveFolder, setWallpaperSaveFolder] = useState("");
   const [prefetchEnabled, setPrefetchEnabled] = useState(false);
   const [prefetchCount, setPrefetchCount] = useState("5");
+  const [changeOnLaunch, setChangeOnLaunch] = useState(false);
+  const [closeBehavior, setCloseBehavior] = useState("ask");
   const [version, setVersion] = useState("");
 
   const BASIC_OPTIONS = [
@@ -151,6 +153,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
         setWallpaperSaveFolder(s.wallpaper_save_folder || "");
         setPrefetchEnabled(s.prefetch_enabled === true);
         setPrefetchCount(String(s.prefetch_count > 0 ? s.prefetch_count : 5));
+        setChangeOnLaunch(s.change_on_launch === true);
+        setCloseBehavior(["ask", "minimize", "exit"].includes(s.close_behavior) ? s.close_behavior : "ask");
         setScheduleTab(BASIC_CRONS.has(s.wallpaper_cron) || isOnceDailyCron(s.wallpaper_cron) ? "basic" : "advanced");
         setStartOnLogin(autostart);
         setApiKeys(toRows(keys));
@@ -318,10 +322,10 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   };
 
-  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string, save: boolean, folder: string, pe: boolean, pc: string) => {
+  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string, save: boolean, folder: string, pe: boolean, pc: string, col: boolean, cb: string) => {
     try {
       const prefetchCount = Math.min(20, Math.max(1, parseInt(pc, 10) || 5));
-      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit, saveWallpapers: save, wallpaperSaveFolder: folder, prefetchEnabled: pe, prefetchCount });
+      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit, saveWallpapers: save, wallpaperSaveFolder: folder, prefetchEnabled: pe, prefetchCount, changeOnLaunch: col, closeBehavior: cb });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setSaved(true);
       savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
@@ -330,22 +334,22 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   }, []);
 
-  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount); };
-  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount); };
-  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount); };
+  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior); };
+  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior); };
+  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior); };
 
   // Server address: empty means the relay default. Applies on blur/Enter.
   const handleApiBaseUrlSave = () => {
     const v = apiBaseUrl.trim();
     if (!v) setApiBaseUrl(DEFAULT_API_BASE_URL);
-    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
+    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior);
   };
 
   // Page direction: applies immediately, no restart needed.
   const handleLayoutDirectionChange = (dir: "ltr" | "rtl") => {
     setLayoutDirection(dir);
     applyLayoutDirection(dir);
-    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
+    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior);
   };
 
   // Wallpaper fit: saved, then applied at once to the current desktop
@@ -354,7 +358,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   // when no wallpaper is set yet.
   const handleWallpaperFitChange = async (v: string) => {
     setWallpaperFit(v);
-    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior);
     try { await invoke("apply_wallpaper_fit"); } catch { /* no wallpaper set yet */ }
   };
 
@@ -362,7 +366,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   // together; without a folder the feature stays inactive.
   const handleSaveWallpapersToggle = (checked: boolean) => {
     setSaveWallpapers(checked);
-    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, checked, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, checked, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior);
   };
 
   const handleChooseSaveFolder = async () => {
@@ -371,7 +375,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     const path = Array.isArray(folder) ? folder[0] : folder;
     if (!path) return;
     setWallpaperSaveFolder(path);
-    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, path, prefetchEnabled, prefetchCount);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, path, prefetchEnabled, prefetchCount, changeOnLaunch, closeBehavior);
   };
 
   // Prefetch upcoming wallpapers: the toggle and the count are saved
@@ -379,7 +383,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   // collapses it back to a single next wallpaper) via refill_prefetch_queue.
   const handlePrefetchToggle = async (checked: boolean) => {
     setPrefetchEnabled(checked);
-    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, checked, prefetchCount);
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, checked, prefetchCount, changeOnLaunch, closeBehavior);
     try { await invoke("refill_prefetch_queue"); } catch { /* nothing queued yet */ }
   };
 
@@ -388,8 +392,22 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const handlePrefetchCountSave = async () => {
     const n = Math.min(20, Math.max(1, parseInt(prefetchCount, 10) || 5));
     setPrefetchCount(String(n));
-    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, String(n));
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, String(n), changeOnLaunch, closeBehavior);
     try { await invoke("refill_prefetch_queue"); } catch { /* nothing queued yet */ }
+  };
+
+  // Change once when the app opens (off by default): with a timed
+  // schedule and this off, opening the app does not change the
+  // wallpaper — it waits for the next scheduled time.
+  const handleChangeOnLaunchToggle = (checked: boolean) => {
+    setChangeOnLaunch(checked);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, checked, closeBehavior);
+  };
+
+  // What the close button does: ask (dialog), minimize to tray, or exit.
+  const handleCloseBehaviorChange = (v: string) => {
+    setCloseBehavior(v);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount, changeOnLaunch, v);
   };
 
   const handleLanguageChange = (code: string) => {
@@ -676,6 +694,18 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
           ) : (
             <CronScheduler value={cron} onChange={handleCronChange} />
           )}
+
+          {/* Change once when the app opens (off by default): with a
+              timed schedule and this off, opening the app does not
+              change the wallpaper — it waits for the next scheduled
+              time. Startup-only mode always changes on launch. */}
+          <div className="flex items-center justify-between gap-3 mt-4 bg-white/4 rounded-2xl border border-white/8 p-4">
+            <div>
+              <p className="text-sm font-medium text-white/70">{t("settings.changeOnLaunch")}</p>
+              <p className="text-xs text-white/50 mt-0.5">{t("settings.changeOnLaunchDesc")}</p>
+            </div>
+            <Toggle enabled={changeOnLaunch} onChange={handleChangeOnLaunchToggle} />
+          </div>
         </section>
 
         {/* ── App ───────────────────────────────────────────────────────── */}
@@ -688,6 +718,21 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                 <p className="text-xs text-white/60 mt-0.5">{t("settings.startWithWindowsDesc")}</p>
               </div>
               <Toggle enabled={startOnLogin} onChange={handleStartOnLoginToggle} />
+            </div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+              <div>
+                <p className="text-sm font-medium text-white">{t("settings.closeBehavior")}</p>
+                <p className="text-xs text-white/60 mt-0.5">{t("settings.closeBehaviorDesc")}</p>
+              </div>
+              <select
+                value={closeBehavior}
+                onChange={(e) => handleCloseBehaviorChange(e.target.value)}
+                className="shrink-0 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-white/30 transition-colors cursor-pointer [&>option]:bg-[#171923] [&>option]:text-white"
+              >
+                <option value="ask">{t("settings.closeAsk")}</option>
+                <option value="minimize">{t("settings.closeMinimize")}</option>
+                <option value="exit">{t("settings.closeExit")}</option>
+              </select>
             </div>
           </div>
         </section>

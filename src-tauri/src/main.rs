@@ -6,6 +6,7 @@
 mod api;
 mod fs;
 mod getter;
+mod never_list;
 mod scheduler;
 mod settings;
 mod shown_history;
@@ -35,6 +36,17 @@ fn main() {
         // the app panic on startup ("missing field `pubkey`"). Auto-update
         // is off for this fork; new versions come from GitHub Releases.
         .plugin(tauri_plugin_process::init())
+        // Single instance: a second launch (e.g. clicking the desktop
+        // icon while the app is already running in the tray) shows,
+        // unminimizes and focuses the running window instead of
+        // opening a new process/window.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .on_menu_event(|app, event| {
             match event.id.as_ref() {
                 "open_settings" => {
@@ -159,13 +171,33 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Hide to tray instead of quitting when the window is closed
+            // What happens on close depends on Settings.close_behavior:
+            // "minimize" hides to the tray (the old behavior), "exit"
+            // quits the app, "ask" (default) shows the close-confirm
+            // dialog in the frontend instead of closing anything.
             let window = app.get_webview_window("main").unwrap();
             let window_clone = window.clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window_clone.hide();
+                    let behavior = crate::settings::load_settings()
+                        .map(|s| s.close_behavior)
+                        .unwrap_or_else(|_| "ask".to_string());
+                    match behavior.as_str() {
+                        "minimize" => {
+                            api.prevent_close();
+                            let _ = window_clone.hide();
+                        }
+                        "exit" => {
+                            api.prevent_close();
+                            window_clone.app_handle().exit(0);
+                        }
+                        _ => {
+                            api.prevent_close();
+                            let _ = window_clone.show();
+                            let _ = window_clone.set_focus();
+                            let _ = window_clone.emit("show-close-confirm", ());
+                        }
+                    }
                 }
             });
 
@@ -180,6 +212,8 @@ fn main() {
             api::wallpaper::apply_wallpaper_fit,
             api::wallpaper::get_wallpaper_dominant_color,
             api::wallpaper::save_wallpaper_to_folder,
+            api::wallpaper::never_show_again,
+            api::featured::get_featured_source,
             api::collections::list_collections,
             api::collections::import_collection,
             api::collections::delete_collection,
@@ -202,6 +236,8 @@ fn main() {
             api::related::toggle_related_source,
             api::settings::get_settings,
             api::settings::update_settings,
+            api::settings::set_close_behavior,
+            api::settings::quit_app,
             api::settings::get_api_key,
             api::settings::verify_and_save_api_key,
             api::settings::get_api_keys,

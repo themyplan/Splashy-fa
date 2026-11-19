@@ -122,3 +122,12 @@ export function IconRefresh({ className }: IconProps) {
     </svg>
   );
 }
+
+// Star: the "featured" (منتخب) source — Unsplash's hand-picked photos.
+export function IconFeatured({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2.5l2.92 6.26 6.88.72-5.14 4.62 1.46 6.75L12 17.4l-6.12 3.45 1.46-6.75L2.2 9.48l6.88-.72L12 2.5z" />
+    </svg>
+  );
+}

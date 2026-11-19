@@ -22,6 +22,8 @@ pub struct AppSettings {
     pub wallpaper_save_folder: String,
     pub prefetch_enabled: bool,
     pub prefetch_count: u32,
+    pub change_on_launch: bool,
+    pub close_behavior: String,
 }
 
 /// One saved key as the frontend is allowed to see it: the full key is
@@ -125,6 +127,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
     let wallpaper_save_folder = s.wallpaper_save_folder.clone();
     let prefetch_enabled = s.prefetch_enabled;
     let prefetch_count = s.prefetch_count;
+    let change_on_launch = s.change_on_launch;
+    let close_behavior = s.close_behavior.clone();
     Ok(AppSettings {
         quality: s.quality,
         orientation: s.orientation,
@@ -137,6 +141,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
         wallpaper_save_folder,
         prefetch_enabled,
         prefetch_count,
+        change_on_launch,
+        close_behavior,
     })
 }
 
@@ -337,6 +343,8 @@ pub async fn update_settings(
     wallpaper_save_folder: String,
     prefetch_enabled: bool,
     prefetch_count: u32,
+    change_on_launch: bool,
+    close_behavior: String,
 ) -> Result<(), String> {
     let valid_qualities = ["raw", "full", "regular", "small", "thumb"];
     if !valid_qualities.contains(&quality.as_str()) {
@@ -368,6 +376,9 @@ pub async fn update_settings(
     if layout_direction != "ltr" && layout_direction != "rtl" {
         return Err(format!("Invalid layout direction: {}", layout_direction));
     }
+    if !["ask", "minimize", "exit"].contains(&close_behavior.as_str()) {
+        return Err(format!("Invalid close behavior: {}", close_behavior));
+    }
 
     let mut s = load_settings()?;
     s.quality = quality;
@@ -382,9 +393,33 @@ pub async fn update_settings(
     s.wallpaper_save_folder = wallpaper_save_folder.trim().to_string();
     s.prefetch_enabled = prefetch_enabled;
     s.prefetch_count = prefetch_count;
+    s.change_on_launch = change_on_launch;
+    s.close_behavior = close_behavior;
     save_settings(&s)?;
 
     notify_cron_changed(wallpaper_cron);
+    Ok(())
+}
+
+/// Save only the close behavior (used by the close-confirm dialog when
+/// the user ticks "remember my choice" — the dialog does not own the
+/// rest of the settings, so it must not go through update_settings).
+#[tauri::command]
+pub async fn set_close_behavior(behavior: String) -> Result<(), String> {
+    if !["ask", "minimize", "exit"].contains(&behavior.as_str()) {
+        return Err(format!("Invalid close behavior: {}", behavior));
+    }
+    let mut s = load_settings()?;
+    s.close_behavior = behavior;
+    save_settings(&s)
+}
+
+/// Quit the whole app (used by the close-confirm dialog's "close
+/// completely" choice — closing the window alone would only hide it
+/// to the tray while the app keeps running).
+#[tauri::command]
+pub async fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
     Ok(())
 }
 

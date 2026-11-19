@@ -2,7 +2,8 @@
   "activeTargets": {
     "countActive": "{{count}} فعال",
     "disableAll": "غیرفعال کردن همه",
-    "emptyBody": "منبع فعالی نیست. مجموعه‌ها، عکاس‌ها، موضوع‌ها، جستجوها، رنگ‌ها یا عکس‌های مشابه را فعال کنید.",
+    "emptyBody": "منبع فعالی نیست. مجموعه‌ها، عکاس‌ها، موضوع‌ها، جستجوها، رنگ‌ها، عکس‌های مشابه یا منتخب را فعال کنید.",
+    "featuredDesc": "عکس‌های منتخب آنسپلش",
     "groupAfternoon": "عصر",
     "groupDay": "روز",
     "groupMorning": "صبح",
@@ -11,6 +12,7 @@
     "groupsTitle": "گروه‌های زمانی",
     "kindCollection": "مجموعه",
     "kindColor": "رنگ",
+    "kindFeatured": "منتخب",
     "kindQuery": "جستجو",
     "kindRelated": "تصویر مشابه",
     "kindTopic": "موضوع",
@@ -25,6 +27,14 @@
     "title": "اتصال به Unsplash",
     "verify": "تأیید و ادامه",
     "verifying": "در حال تأیید…"
+  },
+  "closeConfirm": {
+    "exit": "بستن کامل",
+    "exitDesc": "برنامه کامل بسته می‌شود",
+    "minimize": "رفتن به سینی سیستم",
+    "minimizeDesc": "برنامه در پس‌زمینه روشن می‌ماند",
+    "remember": "انتخابم را یادت باشد (دیگر نپرس)",
+    "title": "بستن برنامه؟"
   },
   "collections": {
     "by": "از {{name}}",
@@ -114,10 +124,13 @@
     "addedToRelated": "به منابع تصاویر مشابه اضافه شد",
     "adding": "در حال افزودن…",
     "chooseFolderTitle": "پوشه‌ای برای ذخیرهٔ تصویر پس‌زمینه انتخاب کنید",
+    "never": "هرگز",
+    "neverDone": "این عکس دیگر نشان داده نمی‌شود",
     "next": "بعدی",
     "photoBy": "عکس از {{name}} در Unsplash",
     "previous": "قبلی",
     "previousWallpaper": "تصویر پس‌زمینه قبلی",
+    "rateLimited": "سقف ساعتی این کلید تمام شد؛ به کلید بعدی برو یا تا سر ساعت بعد صبر کن",
     "refreshWallpaper": "تازه‌سازی تصویر پس‌زمینه",
     "refreshing": "در حال تازه‌سازی…",
     "restoredPrevious": "تصویر پس‌زمینه قبلی برگردانده شد",
@@ -251,7 +264,14 @@
     "startWithWindowsDesc": "هنگام روشن کردن رایانه به‌صورت خودکار باز شود",
     "title": "تنظیمات",
     "scheduleHour": "ساعت",
-    "scheduleMinute": "دقیقه"
+    "scheduleMinute": "دقیقه",
+    "changeOnLaunch": "تغییر عکس هنگام باز شدن برنامه",
+    "changeOnLaunchDesc": "اگر خاموش باشد، با باز شدن برنامه عکس عوض نمی‌شود و فقط سر ساعت خودش عوض می‌شود",
+    "closeBehavior": "هنگام بستن پنجره",
+    "closeBehaviorDesc": "انتخاب کنید با زدن ضربدر چه اتفاقی بیفتد",
+    "closeAsk": "همیشه بپرس",
+    "closeMinimize": "رفتن به سینی سیستم",
+    "closeExit": "خروج از برنامه"
   },
   "titleBar": {
     "close": "بستن",

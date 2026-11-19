@@ -6,10 +6,24 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub struct GetterTarget {
     pub id: String,
     #[serde(rename = "type")]
-    pub kind: String, // "collection" | "user" | "topic" | "related"
+    pub kind: String, // "collection" | "user" | "topic" | "search" | "color" | "related" | "featured"
     pub value: String,
     pub enabled: bool,
     pub weight: u32,
+}
+
+/// The built-in "featured" source: Unsplash's hand-picked photos.
+/// Always present, disabled by default — the user turns it on in the
+/// Active Sources modal. `value` is "featured" so batch toggles and
+/// queue invalidation can find it by value like the other kinds.
+pub fn featured_target() -> GetterTarget {
+    GetterTarget {
+        id: "featured".to_string(),
+        kind: "featured".to_string(),
+        value: "featured".to_string(),
+        enabled: false,
+        weight: 1,
+    }
 }
 
 /// One of the 4 predefined time-of-day groups.
@@ -117,6 +131,18 @@ pub struct Settings {
     /// is on. Clamped to 1..=20; default 5.
     #[serde(default = "default_prefetch_count")]
     pub prefetch_count: u32,
+    /// Change the wallpaper once when the app opens (default OFF).
+    /// With a timed schedule and this off, opening the app does not
+    /// change the wallpaper — it waits for the next scheduled time.
+    /// Startup-only mode ("@startup") always changes on launch: that
+    /// change IS its schedule.
+    #[serde(default)]
+    pub change_on_launch: bool,
+    /// What happens when the window's close button is pressed:
+    /// "ask" (show a dialog), "minimize" (hide to tray), "exit" (quit).
+    /// Default "ask".
+    #[serde(default = "default_close_behavior")]
+    pub close_behavior: String,
 }
 
 fn default_wallpaper_cron() -> String { "0 * * * *".to_string() }
@@ -127,6 +153,7 @@ fn default_api_base_url() -> String { crate::unsplash::RELAY_BASE.to_string() }
 fn default_layout_direction() -> String { "ltr".to_string() }
 fn default_wallpaper_fit() -> String { "fill".to_string() }
 fn default_prefetch_count() -> u32 { 5 }
+fn default_close_behavior() -> String { "ask".to_string() }
 
 /// Effective server base URL (never empty — falls back to the relay).
 pub fn effective_api_base_url(settings: &Settings) -> String {
@@ -167,7 +194,7 @@ impl Default for Settings {
             storage_limit_mb: 500,
             orientation: "landscape".to_string(),
             quality: "regular".to_string(),
-            getter_targets: vec![],
+            getter_targets: vec![featured_target()],
             time_groups: default_time_groups(),
             api_key: option_env!("UNSPLASH_ACCESS_KEY").map(|s| s.to_string()),
             api_keys: vec![],
@@ -179,6 +206,8 @@ impl Default for Settings {
             wallpaper_save_folder: String::new(),
             prefetch_enabled: false,
             prefetch_count: 5,
+            change_on_launch: false,
+            close_behavior: "ask".to_string(),
         }
     }
 }
@@ -242,6 +271,16 @@ pub fn load_settings() -> Result<Settings, String> {
         settings.active_api_key_id = None;
     }
 
+    // One-time migration: the built-in "featured" source (added in
+    // 1.0.7-8) is appended DISABLED, so existing users get the card in
+    // the Active Sources modal without it turning on by itself. It is
+    // added to all time groups like any new source, so it can be
+    // assigned to morning/day/afternoon/night once enabled.
+    if !settings.getter_targets.iter().any(|t| t.kind == "featured") {
+        settings.getter_targets.push(featured_target());
+        add_target_to_all_groups(&mut settings, "featured");
+    }
+
     // Normalize the server address, direction and fit: an empty address
     // falls back to the relay default (never to direct api.unsplash.com),
     // anything but "rtl" means "ltr" (the original upstream layout), and
@@ -252,6 +291,9 @@ pub fn load_settings() -> Result<Settings, String> {
     }
     settings.wallpaper_fit = effective_wallpaper_fit(&settings);
     settings.prefetch_count = settings.prefetch_count.clamp(1, 20);
+    if !["ask", "minimize", "exit"].contains(&settings.close_behavior.as_str()) {
+        settings.close_behavior = "ask".to_string();
+    }
 
     // One-time migration: if all groups are empty but targets exist, populate all groups.
     if settings.time_groups.iter().all(|g| g.target_ids.is_empty())

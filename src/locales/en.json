@@ -33,6 +33,9 @@
     "addToRelated": "Add to Related",
     "adding": "Adding…",
     "addedToRelated": "Added to Related sources",
+    "never": "Never",
+    "neverDone": "This photo will not be shown again",
+    "rateLimited": "This key's hourly limit is used up; switch to the next key or wait until the next hour",
     "chooseFolderTitle": "Choose folder to save wallpaper"
   },
   "collections": {
@@ -207,7 +210,22 @@
       "usageTitle": "API usage"
     },
     "scheduleHour": "Hour",
-    "scheduleMinute": "Minute"
+    "scheduleMinute": "Minute",
+    "changeOnLaunch": "Change wallpaper when the app opens",
+    "changeOnLaunchDesc": "When off, opening the app does not change the wallpaper; it only changes on schedule",
+    "closeBehavior": "When closing the window",
+    "closeBehaviorDesc": "Choose what happens when you press the close button",
+    "closeAsk": "Always ask",
+    "closeMinimize": "Minimize to tray",
+    "closeExit": "Exit application"
+  },
+  "closeConfirm": {
+    "title": "Close the app?",
+    "minimize": "Minimize to tray",
+    "minimizeDesc": "The app keeps running in the background",
+    "exit": "Close completely",
+    "exitDesc": "The app exits completely",
+    "remember": "Remember my choice (don't ask again)"
   },
   "apiSetup": {
     "title": "Connect to Unsplash",
@@ -222,13 +240,15 @@
     "noneActive": "None active",
     "countActive": "{{count}} active",
     "disableAll": "Disable all",
-    "emptyBody": "No active sources. Enable collections, users, topics, queries, colors, or related photos.",
+    "emptyBody": "No active sources. Enable collections, users, topics, queries, colors, related photos, or featured.",
+    "featuredDesc": "Featured photos from Unsplash",
     "kindCollection": "Collection",
     "kindUser": "User",
     "kindTopic": "Topic",
     "kindQuery": "Query",
     "kindColor": "Color",
     "kindRelated": "Related",
+    "kindFeatured": "Featured",
     "groupMorning": "Morning",
     "groupDay": "Day",
     "groupAfternoon": "Afternoon",

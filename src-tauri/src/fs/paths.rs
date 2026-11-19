@@ -41,6 +41,12 @@ pub fn shown_history_file() -> Result<PathBuf, String> {
     Ok(root_dir()?.join("shown_history.json"))
 }
 
+/// Photos the user marked "never" (see never_list.rs). Kept in its own
+/// file, NOT inside settings.json, so settings stay small.
+pub fn never_blacklist_file() -> Result<PathBuf, String> {
+    Ok(root_dir()?.join("never_blacklist.json"))
+}
+
 pub fn related_dir() -> Result<PathBuf, String> {
     Ok(root_dir()?.join("related"))
 }

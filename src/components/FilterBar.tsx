@@ -102,6 +102,7 @@ export default function FilterBar({
           type="text"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
+          dir="auto"
           placeholder={searchPlaceholder ?? t("filterBar.all")}
           className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 transition-colors"
         />

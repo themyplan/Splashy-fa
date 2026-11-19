@@ -33,6 +33,16 @@ pub async fn refill_prefetch_queue() -> Result<(), String> {
     crate::wallpaper::prefetch_upcoming_wallpapers().await
 }
 
+/// Mark the given photo "never" (it will never become the wallpaper
+/// again, even after the shown-history pool resets) and immediately
+/// advance to the next wallpaper — the same path as Refresh, so the
+/// queued next photo (or a fresh pick) takes its place at once.
+#[tauri::command]
+pub async fn never_show_again(app: tauri::AppHandle, photo_id: String) -> Result<String, String> {
+    crate::never_list::add(&photo_id);
+    refresh_wallpaper(app).await
+}
+
 #[tauri::command]
 pub async fn get_current_wallpaper() -> Result<Option<CurrentWallpaperInfo>, String> {
     let current_dir = paths::current_dir()?;

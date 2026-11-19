@@ -1,6 +1,7 @@
 pub mod batch;
 pub mod collections;
 pub mod colors;
+pub mod featured;
 pub mod queries;
 pub mod related;
 pub mod settings;

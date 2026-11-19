@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { AdjacentWallpapers, CurrentWallpaperInfo } from "../types";
+import { friendlyErrorText } from "../utils";
 import { IconRefresh, IconUndo } from "../components/icons";
 import ActiveTargetsModal from "../components/ActiveTargetsModal";
 import GlassPanel from "../components/GlassPanel";
@@ -101,6 +102,8 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
   const [relatedStatusAnimKey, setRelatedStatusAnimKey] = useState(0);
   const relatedStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [neverBusy, setNeverBusy] = useState(false);
+
   const [statusVisible, setStatusVisible] = useState(false);
   const [statusAnimKey, setStatusAnimKey] = useState(0);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,9 +177,27 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
       await invoke("import_related_source", { input: wallpaper.unsplash_url });
       setRelatedStatus(t("home.addedToRelated"));
     } catch (e) {
-      setRelatedStatus(`Error: ${String(e)}`);
+      setRelatedStatus(friendlyErrorText(`Error: ${String(e)}`, t("home.rateLimited")));
     } finally {
       setAddingRelated(false);
+    }
+  };
+
+  // "Never": blacklist the current photo so it never becomes the
+  // wallpaper again, then advance to the next photo at once (the
+  // backend does the change on the same path as Refresh).
+  const handleNever = async () => {
+    if (!wallpaper || neverBusy) return;
+    setNeverBusy(true);
+    setSaveStatus(null);
+    try {
+      await invoke("never_show_again", { photoId: wallpaper.photo_id });
+      await loadWallpaper();
+      setSaveStatus(t("home.neverDone"));
+    } catch (e) {
+      setSaveStatus(friendlyErrorText(`Error: ${String(e)}`, t("home.rateLimited")));
+    } finally {
+      setNeverBusy(false);
     }
   };
 
@@ -189,7 +210,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
       await loadWallpaper();
       setSaveStatus(t("home.restoredPrevious"));
     } catch (e) {
-      setSaveStatus(`Error: ${String(e)}`);
+      setSaveStatus(friendlyErrorText(`Error: ${String(e)}`, t("home.rateLimited")));
     } finally {
       setRestoring(false);
     }
@@ -205,7 +226,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
       const filename = savedPath.split(/[\\/]/).pop() ?? savedPath;
       setSaveStatus(t("home.savedAs", { filename }));
     } catch (e) {
-      setSaveStatus(`Error: ${String(e)}`);
+      setSaveStatus(friendlyErrorText(`Error: ${String(e)}`, t("home.rateLimited")));
     } finally {
       setSaving(false);
     }
@@ -264,7 +285,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
           <div className={`absolute top-[calc(50%+6.5rem)] max-w-sm w-full text-center text-sm px-4 py-3 rounded-xl overflow-hidden whitespace-pre-line ${
             isError ? "bg-red-900/40 text-red-300" : "bg-emerald-900/40 text-emerald-300"
           }`}>
-            {renderStatusWithLinks(status)}
+            {renderStatusWithLinks(status.includes("ERR_RATE_LIMITED") ? t("home.rateLimited") : status)}
             <div
               key={statusAnimKey}
               className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${isError ? "bg-red-400/60" : "bg-emerald-400/60"}`}
@@ -284,19 +305,19 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
           <div className="flex flex-col items-end gap-2">
             {relatedStatusVisible && relatedStatus && (
               <span className={`relative text-xs px-2 py-1 rounded-lg overflow-hidden ${
-                relatedStatus.startsWith("Error") ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
+                relatedStatus.startsWith("Error") || relatedStatus === t("home.rateLimited") ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
               }`}>
                 {relatedStatus}
-                <span key={relatedStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${relatedStatus.startsWith("Error") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
+                <span key={relatedStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${relatedStatus.startsWith("Error") || relatedStatus === t("home.rateLimited") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
                   style={{ animation: `status-bar-shrink ${SAVE_STATUS_DURATION_MS}ms linear forwards` }} />
               </span>
             )}
             {saveStatusVisible && saveStatus && (
               <span className={`relative text-xs px-2 py-1 rounded-lg overflow-hidden ${
-                saveStatus.startsWith("Error") ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
+                saveStatus.startsWith("Error") || saveStatus === t("home.rateLimited") ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
               }`}>
                 {saveStatus}
-                <span key={saveStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${saveStatus.startsWith("Error") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
+                <span key={saveStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${saveStatus.startsWith("Error") || saveStatus === t("home.rateLimited") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
                   style={{ animation: `status-bar-shrink ${SAVE_STATUS_DURATION_MS}ms linear forwards` }} />
               </span>
             )}
@@ -307,6 +328,14 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {addingRelated ? t("home.adding") : t("home.addToRelated")}
+              </button>
+              {/* "Never": blacklist this photo forever and go to the next one. */}
+              <button
+                onClick={handleNever}
+                disabled={neverBusy}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {neverBusy ? t("home.refreshing") : t("home.never")}
               </button>
               <button
                 onClick={handleSave}

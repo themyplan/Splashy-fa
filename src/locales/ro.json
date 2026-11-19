@@ -32,7 +32,10 @@
     "savedAs": "Salvat ca {{filename}}",
     "addToRelated": "Adaugă la Similare",
     "adding": "Se adaugă…",
-    "addedToRelated": "Adăugat la sursele Similare"
+    "addedToRelated": "Adăugat la sursele Similare",
+    "never": "Niciodată",
+    "neverDone": "Această fotografie nu va mai fi afișată",
+    "rateLimited": "Limita orară a acestei chei s-a epuizat; treci la următoarea cheie sau așteaptă până la ora următoare"
   },
   "collections": {
     "title": "Colecții",
@@ -170,7 +173,22 @@
     "sectionApiKey": "Cheie API Unsplash",
     "apiKeyDesc": "Cheia ta de acces Unsplash. Obține una gratuit la unsplash.com/developers.",
     "apiKeyPlaceholder": "Lipește cheia de acces aici",
-    "apiKeySave": "Verifică & Salvează"
+    "apiKeySave": "Verifică & Salvează",
+    "changeOnLaunch": "Schimbă imaginea la deschiderea aplicației",
+    "changeOnLaunchDesc": "Dacă este dezactivat, deschiderea aplicației nu schimbă imaginea; se schimbă doar la ora programată",
+    "closeBehavior": "La închiderea ferestrei",
+    "closeBehaviorDesc": "Alege ce se întâmplă când apeși butonul de închidere",
+    "closeAsk": "Întreabă mereu",
+    "closeMinimize": "Minimizează în tavă",
+    "closeExit": "Ieși din aplicație"
+  },
+  "closeConfirm": {
+    "title": "Închizi aplicația?",
+    "minimize": "Minimizează în tavă",
+    "minimizeDesc": "Aplicația rămâne pornită în fundal",
+    "exit": "Închide complet",
+    "exitDesc": "Aplicația se închide complet",
+    "remember": "Ține minte alegerea mea (nu mai întreba)"
   },
   "apiSetup": {
     "title": "Conectează-te la Unsplash",
@@ -185,13 +203,15 @@
     "noneActive": "Niciuna activă",
     "countActive": "{{count}} active",
     "disableAll": "Dezactivează tot",
-    "emptyBody": "Nicio sursă activă. Activează colecții, utilizatori, subiecte, căutări, culori sau fotografii similare.",
+    "emptyBody": "Nicio sursă activă. Activează colecții, utilizatori, subiecte, căutări, culori, fotografii similare sau recomandate.",
+    "featuredDesc": "Fotografii recomandate de Unsplash",
     "kindCollection": "Colecție",
     "kindUser": "Utilizator",
     "kindTopic": "Subiect",
     "kindQuery": "Căutare",
     "kindColor": "Culoare",
     "kindRelated": "Similar",
+    "kindFeatured": "Recomandate",
     "groupMorning": "Dimineață",
     "groupDay": "Zi",
     "groupAfternoon": "Seară",

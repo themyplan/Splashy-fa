@@ -28,12 +28,15 @@ const MAX_UNSEEN_ATTEMPTS: usize = 10;
 /// skipping photos that were already shown as wallpaper — until the
 /// pool is exhausted. History is global by photo ID, across all
 /// sources, and lives in `shown_history.json` (see shown_history.rs).
-/// When MAX_UNSEEN_ATTEMPTS consecutive fetches all return already-shown
-/// photos, the pool is treated as exhausted: the history is cleared and
-/// the last photo is accepted, starting a new cycle from the beginning.
-/// A photo saved in the save folder is reused from disk then, so the
-/// new cycle costs no re-download. Rate-limit errors abort immediately
-/// (they are not retried as "seen" photos).
+/// Photos on the never list (`never_blacklist.json`, see never_list.rs)
+/// are skipped exactly like already-shown ones, except the never list
+/// is NEVER cleared: a "never" photo stays never even when a new cycle
+/// starts. When MAX_UNSEEN_ATTEMPTS consecutive fetches all return
+/// already-shown photos, the pool is treated as exhausted: the history
+/// is cleared and the last photo is accepted, starting a new cycle from
+/// the beginning. A photo saved in the save folder is reused from disk
+/// then, so the new cycle costs no re-download. Rate-limit errors abort
+/// immediately (they are not retried as "seen" photos).
 pub async fn run_getter_cycle(
     client: &UnsplashClient,
     settings: &Settings,
@@ -42,11 +45,13 @@ pub async fn run_getter_cycle(
     let mut last: Option<GetterResult> = None;
     for attempt in 1..=MAX_UNSEEN_ATTEMPTS {
         let result = run_getter_cycle_once(client, settings, at).await?;
-        if !crate::shown_history::is_shown(&result.photo.id) {
+        if !crate::shown_history::is_shown(&result.photo.id)
+            && !crate::never_list::is_never(&result.photo.id)
+        {
             return Ok(result);
         }
         log::info!(
-            "[getter] Photo id={} already shown, retrying for an unseen photo ({}/{})",
+            "[getter] Photo id={} already shown or never-listed, retrying for an unseen photo ({}/{})",
             result.photo.id,
             attempt,
             MAX_UNSEEN_ATTEMPTS
@@ -61,7 +66,16 @@ pub async fn run_getter_cycle(
         MAX_UNSEEN_ATTEMPTS
     );
     crate::shown_history::clear();
-    Ok(last.expect("loop ran at least once, so `last` is set"))
+    let last = last.expect("loop ran at least once, so `last` is set");
+    // The never list is NOT cleared with the history: a "never" photo
+    // must stay never. If the last pick was never-listed, fetch once
+    // more so the new cycle does not start with a blacklisted photo.
+    if crate::never_list::is_never(&last.photo.id) {
+        if let Ok(fresh) = run_getter_cycle_once(client, settings, at).await {
+            return Ok(fresh);
+        }
+    }
+    Ok(last)
 }
 
 /// Select a random photo according to the getter_targets in settings.
@@ -298,6 +312,7 @@ async fn fetch_for_target(
             "user" => params.push(("username", &t.value)),
             "topic" => params.push(("topics", &t.value)),
             "search" | "color" => params.push(("query", &t.value)),
+            "featured" => params.push(("featured", "true")),
             "related" => return fetch_related_photo(client, &t.value).await,
             _ => return Err(format!("Unknown target type: {}", t.kind)),
         }

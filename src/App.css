@@ -27,6 +27,16 @@
   unicode-bidi: plaintext;
 }
 
+/* Placeholders are NOT covered by the rule above: it targets elements,
+   but the ::placeholder pseudo-element orders its own text. A Persian
+   placeholder ending in "…" (e.g. "مثلاً کوهستان، سایبرپانک، مینیمال…")
+   rendered its trailing dots at the wrong end of the sentence. The
+   search/import inputs also carry dir="auto" so the input itself
+   follows the placeholder's language. */
+[lang="fa"] input::placeholder, [lang="fa"] textarea::placeholder {
+  unicode-bidi: plaintext;
+}
+
 /* Latin-only mono text (usage counter 25/50, masked keys, cron strings)
    must stay left-to-right inside an RTL page. */
 [dir="rtl"] .font-mono {

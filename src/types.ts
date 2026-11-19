@@ -19,6 +19,10 @@ export interface AppSettings {
   prefetch_enabled: boolean;
   /** How many upcoming wallpapers to prefetch when enabled (1–20, default 5). */
   prefetch_count: number;
+  /** Change the wallpaper once when the app opens (off by default). */
+  change_on_launch: boolean;
+  /** What the close button does: "ask" | "minimize" | "exit". */
+  close_behavior: string;
 }
 
 /// One saved Unsplash API key as returned by `get_api_keys`.
@@ -96,6 +100,12 @@ export interface RelatedSourceSummary {
   author_username: string;
   unsplash_url: string;
   cover_url: string | null;
+  enabled: boolean;
+}
+
+/// The built-in "featured" source (Unsplash's hand-picked photos):
+/// a single on/off switch, not a list.
+export interface FeaturedSource {
   enabled: boolean;
 }
 

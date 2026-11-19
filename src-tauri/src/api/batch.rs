@@ -31,6 +31,7 @@ pub async fn batch_toggle_sources(changes: Vec<ToggleChange>) -> Result<(), Stri
             "query" => ("search", FindBy::Id),
             "color" => ("color", FindBy::Value),
             "related" => ("related", FindBy::Value),
+            "featured" => ("featured", FindBy::Value),
             _ => continue,
         };
 

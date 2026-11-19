@@ -107,6 +107,7 @@ export default function RelatedView({ refreshKey = 0 }: { refreshKey?: number })
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          dir="auto"
           placeholder={t("related.placeholder")}
           className="flex-1 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 transition-colors"
         />

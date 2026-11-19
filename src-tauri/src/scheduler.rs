@@ -62,9 +62,18 @@ pub fn run_startup_sync() {
 /// Uses a watch channel so changing the cron expression in settings
 /// immediately cancels the current sleep and reschedules.
 pub fn start_wallpaper_scheduler(app_handle: tauri::AppHandle) {
-    let initial_cron = load_settings()
-        .map(|s| s.wallpaper_cron)
-        .unwrap_or_else(|_| "0 * * * *".to_string());
+    let (initial_cron, change_on_launch) = load_settings()
+        .map(|s| (s.wallpaper_cron, s.change_on_launch))
+        .unwrap_or_else(|_| ("0 * * * *".to_string(), false));
+
+    // Change once on launch only when the user asked for it, or in
+    // startup-only mode ("@startup" / empty cron) — there the launch
+    // change IS the schedule; without it nothing would ever change.
+    // With a timed schedule and the toggle off, launch only shows the
+    // window and the first change waits for the next cron tick.
+    let run_on_launch = change_on_launch
+        || initial_cron == "@startup"
+        || initial_cron.is_empty();
 
     let (tx, mut rx) = watch::channel(initial_cron);
     CRON_TX.set(tx).ok();
@@ -93,21 +102,25 @@ pub fn start_wallpaper_scheduler(app_handle: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         log::info!("[scheduler] Starting wallpaper scheduler");
 
-        // Run once immediately on launch. On a network failure keep
-        // retrying every 5 minutes until the next scheduled time (or
-        // until success / a settings change in startup-only mode).
-        if let Err(e) = run_wallpaper_cycle(&app_handle).await {
-            if is_network_error(&e) {
-                let deadline = delay_until_next_fire(&rx.borrow().clone())
-                    .map(|d| Instant::now() + d);
-                retry_after_network_failure(&app_handle, &mut rx, deadline).await;
+        // Run once immediately on launch (only when run_on_launch —
+        // see above). On a network failure keep retrying every 5
+        // minutes until the next scheduled time (or until success / a
+        // settings change in startup-only mode).
+        if run_on_launch {
+            if let Err(e) = run_wallpaper_cycle(&app_handle).await {
+                if is_network_error(&e) {
+                    let deadline = delay_until_next_fire(&rx.borrow().clone())
+                        .map(|d| Instant::now() + d);
+                    retry_after_network_failure(&app_handle, &mut rx, deadline).await;
+                }
             }
         }
 
         loop {
             let cron_expr = rx.borrow().clone();
 
-            // Startup-only mode: wallpaper was already changed above; just wait for settings to change.
+            // Startup-only mode: the wallpaper was already changed on
+            // launch above; just wait for settings to change.
             if cron_expr == "@startup" || cron_expr.is_empty() {
                 log::info!("[scheduler] Startup-only mode — no recurring schedule");
                 rx.changed().await.ok();
