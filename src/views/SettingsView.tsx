@@ -95,6 +95,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const [wallpaperFit, setWallpaperFit] = useState("fill");
   const [saveWallpapers, setSaveWallpapers] = useState(false);
   const [wallpaperSaveFolder, setWallpaperSaveFolder] = useState("");
+  const [prefetchEnabled, setPrefetchEnabled] = useState(false);
+  const [prefetchCount, setPrefetchCount] = useState("5");
   const [version, setVersion] = useState("");
 
   const BASIC_OPTIONS = [
@@ -119,6 +121,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     { value: "landscape", label: t("settings.orientationLandscape"), description: t("settings.orientationLandscapeDesc") },
     { value: "portrait",  label: t("settings.orientationPortrait"),  description: t("settings.orientationPortraitDesc") },
     { value: "squarish",  label: t("settings.orientationSquarish"),  description: t("settings.orientationSquarishDesc") },
+    { value: "all",       label: t("settings.orientationAll"),       description: t("settings.orientationAllDesc") },
   ];
 
   const FIT_OPTIONS = [
@@ -146,6 +149,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
         setWallpaperFit(["fill", "fit", "stretch", "tile", "center", "span"].includes(s.wallpaper_fit) ? s.wallpaper_fit : "fill");
         setSaveWallpapers(s.save_wallpapers === true);
         setWallpaperSaveFolder(s.wallpaper_save_folder || "");
+        setPrefetchEnabled(s.prefetch_enabled === true);
+        setPrefetchCount(String(s.prefetch_count > 0 ? s.prefetch_count : 5));
         setScheduleTab(BASIC_CRONS.has(s.wallpaper_cron) || isOnceDailyCron(s.wallpaper_cron) ? "basic" : "advanced");
         setStartOnLogin(autostart);
         setApiKeys(toRows(keys));
@@ -313,9 +318,10 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   };
 
-  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string, save: boolean, folder: string) => {
+  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string, save: boolean, folder: string, pe: boolean, pc: string) => {
     try {
-      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit, saveWallpapers: save, wallpaperSaveFolder: folder });
+      const prefetchCount = Math.min(20, Math.max(1, parseInt(pc, 10) || 5));
+      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit, saveWallpapers: save, wallpaperSaveFolder: folder, prefetchEnabled: pe, prefetchCount });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setSaved(true);
       savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
@@ -324,22 +330,22 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   }, []);
 
-  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder); };
-  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder); };
-  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder); };
+  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount); };
+  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount); };
+  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount); };
 
   // Server address: empty means the relay default. Applies on blur/Enter.
   const handleApiBaseUrlSave = () => {
     const v = apiBaseUrl.trim();
     if (!v) setApiBaseUrl(DEFAULT_API_BASE_URL);
-    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder);
+    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
   };
 
   // Page direction: applies immediately, no restart needed.
   const handleLayoutDirectionChange = (dir: "ltr" | "rtl") => {
     setLayoutDirection(dir);
     applyLayoutDirection(dir);
-    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit, saveWallpapers, wallpaperSaveFolder);
+    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
   };
 
   // Wallpaper fit: saved, then applied at once to the current desktop
@@ -348,7 +354,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   // when no wallpaper is set yet.
   const handleWallpaperFitChange = async (v: string) => {
     setWallpaperFit(v);
-    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v, saveWallpapers, wallpaperSaveFolder);
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
     try { await invoke("apply_wallpaper_fit"); } catch { /* no wallpaper set yet */ }
   };
 
@@ -356,7 +362,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   // together; without a folder the feature stays inactive.
   const handleSaveWallpapersToggle = (checked: boolean) => {
     setSaveWallpapers(checked);
-    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, checked, wallpaperSaveFolder);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, checked, wallpaperSaveFolder, prefetchEnabled, prefetchCount);
   };
 
   const handleChooseSaveFolder = async () => {
@@ -365,7 +371,25 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     const path = Array.isArray(folder) ? folder[0] : folder;
     if (!path) return;
     setWallpaperSaveFolder(path);
-    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, path);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, path, prefetchEnabled, prefetchCount);
+  };
+
+  // Prefetch upcoming wallpapers: the toggle and the count are saved
+  // together. Turning it on fills the queue at once (and turning it off
+  // collapses it back to a single next wallpaper) via refill_prefetch_queue.
+  const handlePrefetchToggle = async (checked: boolean) => {
+    setPrefetchEnabled(checked);
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, checked, prefetchCount);
+    try { await invoke("refill_prefetch_queue"); } catch { /* nothing queued yet */ }
+  };
+
+  // Number box: digits only; auto-saves on blur/Enter (no save button),
+  // clamped to 1..=20 — same pattern as the server-address field.
+  const handlePrefetchCountSave = async () => {
+    const n = Math.min(20, Math.max(1, parseInt(prefetchCount, 10) || 5));
+    setPrefetchCount(String(n));
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder, prefetchEnabled, String(n));
+    try { await invoke("refill_prefetch_queue"); } catch { /* nothing queued yet */ }
   };
 
   const handleLanguageChange = (code: string) => {
@@ -412,7 +436,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
             {/* Orientation */}
             <div>
               <p className="text-sm font-medium text-white/70 mb-2">{t("settings.orientation")}</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {ORIENTATION_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
@@ -503,6 +527,37 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                   </button>
                 </div>
               )}
+            </div>
+
+            <div className="border-t border-white/8" />
+
+            {/* Prefetch upcoming wallpapers */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white/70">{t("settings.prefetch")}</p>
+                  <p className="text-xs text-white/50 mt-0.5">{t("settings.prefetchDesc")}</p>
+                </div>
+                <Toggle enabled={prefetchEnabled} onChange={handlePrefetchToggle} />
+              </div>
+              <div className={`flex items-center gap-2 mt-3 transition-opacity ${prefetchEnabled ? "" : "opacity-40"}`}>
+                <label htmlFor="prefetch-count" className="text-xs text-white/60 shrink-0">{t("settings.prefetchCount")}</label>
+                <input
+                  id="prefetch-count"
+                  type="text"
+                  inputMode="numeric"
+                  disabled={!prefetchEnabled}
+                  value={prefetchCount}
+                  onChange={(e) => setPrefetchCount(e.target.value.replace(/[^0-9]/g, ""))}
+                  onBlur={handlePrefetchCountSave}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  className={`w-16 px-3 py-2 rounded-lg border text-xs text-white text-center outline-none disabled:cursor-not-allowed transition-all ${
+                    prefetchEnabled
+                      ? "border-white/25 bg-white/10 focus:border-white/40"
+                      : "border-white/8 bg-white/4"
+                  }`}
+                />
+              </div>
             </div>
           </div>
         </section>

@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { AdjacentWallpapers, CurrentWallpaperInfo } from "../types";
-import { IconRefresh } from "../components/icons";
+import { IconRefresh, IconUndo } from "../components/icons";
 import ActiveTargetsModal from "../components/ActiveTargetsModal";
 import GlassPanel from "../components/GlassPanel";
 
@@ -242,36 +242,26 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
           {loading ? t("home.refreshing") : t("home.refreshWallpaper")}
         </button>
 
-        {/* Previous-wallpaper box: click to restore it as the current one
-            (swaps with the current wallpaper, so it toggles back and forth). */}
+        {/* Previous wallpaper: a glass pill like the refresh button
+            (no photo, no author) — click to restore it as the current
+            wallpaper (swaps with the current one, so it toggles back
+            and forth). */}
         {adjacent.previous && (
           <button
             onClick={handleRestorePrevious}
             disabled={restoring}
-            className="relative w-72 overflow-hidden rounded-2xl text-start transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="relative flex items-center gap-3 px-8 py-4 rounded-2xl text-base font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 cursor-pointer active:scale-95 overflow-hidden"
           >
             <div className="absolute inset-0 -z-10">
               <GlassPanel cornerRadius={16} className="w-full h-full" />
             </div>
-            <div className="relative w-full h-32 overflow-hidden">
-              <img
-                key={`${adjacent.previous.photo_id}-${cacheKey}`}
-                src={`${convertFileSrc(adjacent.previous.path)}?t=${cacheKey}`}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            </div>
-            <div className="px-3 py-2">
-              <div className="text-xs font-medium text-white/90">{t("home.previousWallpaper")}</div>
-              <div className="text-[11px] text-white/60 truncate">
-                {t("home.photoBy", { name: adjacent.previous.author_name })}
-              </div>
-            </div>
+            <IconUndo className="w-5 h-5" />
+            {t("home.previousWallpaper")}
           </button>
         )}
 
         {statusVisible && status && (
-          <div className={`absolute top-[calc(50%+3rem)] max-w-sm w-full text-center text-sm px-4 py-3 rounded-xl overflow-hidden whitespace-pre-line ${
+          <div className={`absolute top-[calc(50%+6.5rem)] max-w-sm w-full text-center text-sm px-4 py-3 rounded-xl overflow-hidden whitespace-pre-line ${
             isError ? "bg-red-900/40 text-red-300" : "bg-emerald-900/40 text-emerald-300"
           }`}>
             {renderStatusWithLinks(status)}

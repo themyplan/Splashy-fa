@@ -108,6 +108,15 @@ pub struct Settings {
     /// chosen yet; the feature stays inactive until one is picked.
     #[serde(default)]
     pub wallpaper_save_folder: String,
+    /// Prefetch upcoming wallpapers in advance (off by default). When on,
+    /// `prefetch_count` photos are kept ready so the wallpaper keeps
+    /// changing even without internet.
+    #[serde(default)]
+    pub prefetch_enabled: bool,
+    /// How many upcoming wallpapers to prefetch when `prefetch_enabled`
+    /// is on. Clamped to 1..=20; default 5.
+    #[serde(default = "default_prefetch_count")]
+    pub prefetch_count: u32,
 }
 
 fn default_wallpaper_cron() -> String { "0 * * * *".to_string() }
@@ -117,6 +126,7 @@ fn default_quality() -> String { "regular".to_string() }
 fn default_api_base_url() -> String { crate::unsplash::RELAY_BASE.to_string() }
 fn default_layout_direction() -> String { "ltr".to_string() }
 fn default_wallpaper_fit() -> String { "fill".to_string() }
+fn default_prefetch_count() -> u32 { 5 }
 
 /// Effective server base URL (never empty — falls back to the relay).
 pub fn effective_api_base_url(settings: &Settings) -> String {
@@ -125,6 +135,17 @@ pub fn effective_api_base_url(settings: &Settings) -> String {
         default_api_base_url()
     } else {
         base.to_string()
+    }
+}
+
+/// How many upcoming wallpapers to keep prefetched: 1 when the prefetch
+/// option is off (today's behavior — a single next wallpaper), otherwise
+/// the user's count clamped to 1..=20.
+pub fn effective_prefetch_count(settings: &Settings) -> usize {
+    if !settings.prefetch_enabled {
+        1
+    } else {
+        settings.prefetch_count.clamp(1, 20) as usize
     }
 }
 
@@ -156,6 +177,8 @@ impl Default for Settings {
             wallpaper_fit: "fill".to_string(),
             save_wallpapers: false,
             wallpaper_save_folder: String::new(),
+            prefetch_enabled: false,
+            prefetch_count: 5,
         }
     }
 }
@@ -228,6 +251,7 @@ pub fn load_settings() -> Result<Settings, String> {
         settings.layout_direction = "ltr".to_string();
     }
     settings.wallpaper_fit = effective_wallpaper_fit(&settings);
+    settings.prefetch_count = settings.prefetch_count.clamp(1, 20);
 
     // One-time migration: if all groups are empty but targets exist, populate all groups.
     if settings.time_groups.iter().all(|g| g.target_ids.is_empty())

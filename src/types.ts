@@ -15,6 +15,10 @@ export interface AppSettings {
   save_wallpapers: boolean;
   /** Folder used when `save_wallpapers` is on ("" = none chosen yet). */
   wallpaper_save_folder: string;
+  /** Prefetch upcoming wallpapers in advance (off by default). */
+  prefetch_enabled: boolean;
+  /** How many upcoming wallpapers to prefetch when enabled (1–20, default 5). */
+  prefetch_count: number;
 }
 
 /// One saved Unsplash API key as returned by `get_api_keys`.

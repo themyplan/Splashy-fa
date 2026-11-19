@@ -20,6 +20,8 @@ pub struct AppSettings {
     pub wallpaper_fit: String,
     pub save_wallpapers: bool,
     pub wallpaper_save_folder: String,
+    pub prefetch_enabled: bool,
+    pub prefetch_count: u32,
 }
 
 /// One saved key as the frontend is allowed to see it: the full key is
@@ -121,6 +123,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
     let wallpaper_fit = crate::settings::effective_wallpaper_fit(&s);
     let save_wallpapers = s.save_wallpapers;
     let wallpaper_save_folder = s.wallpaper_save_folder.clone();
+    let prefetch_enabled = s.prefetch_enabled;
+    let prefetch_count = s.prefetch_count;
     Ok(AppSettings {
         quality: s.quality,
         orientation: s.orientation,
@@ -131,6 +135,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
         wallpaper_fit,
         save_wallpapers,
         wallpaper_save_folder,
+        prefetch_enabled,
+        prefetch_count,
     })
 }
 
@@ -329,14 +335,19 @@ pub async fn update_settings(
     wallpaper_fit: String,
     save_wallpapers: bool,
     wallpaper_save_folder: String,
+    prefetch_enabled: bool,
+    prefetch_count: u32,
 ) -> Result<(), String> {
     let valid_qualities = ["raw", "full", "regular", "small", "thumb"];
     if !valid_qualities.contains(&quality.as_str()) {
         return Err(format!("Invalid quality: {}", quality));
     }
-    let valid_orientations = ["landscape", "portrait", "squarish"];
+    let valid_orientations = ["landscape", "portrait", "squarish", "all"];
     if !valid_orientations.contains(&orientation.as_str()) {
         return Err(format!("Invalid orientation: {}", orientation));
+    }
+    if !(1..=20).contains(&prefetch_count) {
+        return Err(format!("Invalid prefetch count: {} (must be 1..=20)", prefetch_count));
     }
     let valid_fits = ["fill", "fit", "stretch", "tile", "center", "span"];
     if !valid_fits.contains(&wallpaper_fit.as_str()) {
@@ -369,6 +380,8 @@ pub async fn update_settings(
     // just keeps the feature inactive until one is picked.
     s.save_wallpapers = save_wallpapers;
     s.wallpaper_save_folder = wallpaper_save_folder.trim().to_string();
+    s.prefetch_enabled = prefetch_enabled;
+    s.prefetch_count = prefetch_count;
     save_settings(&s)?;
 
     notify_cron_changed(wallpaper_cron);

@@ -183,17 +183,21 @@ async fn run_getter_cycle_once(
 }
 
 /// Returns orientations to try in order: selected first, portrait last (unless selected is portrait).
-fn orientations_to_try(selected: &str) -> Vec<&'static str> {
+/// "all" means no orientation filter at all: a single entry with no
+/// orientation parameter, so the fallback chain is skipped entirely.
+fn orientations_to_try(selected: &str) -> Vec<Option<&'static str>> {
     match selected {
-        "portrait" => vec!["portrait", "landscape", "squarish"],
-        "squarish"  => vec!["squarish", "landscape", "portrait"],
-        _           => vec!["landscape", "squarish", "portrait"],
+        "all"       => vec![None],
+        "portrait"  => vec![Some("portrait"), Some("landscape"), Some("squarish")],
+        "squarish"  => vec![Some("squarish"), Some("landscape"), Some("portrait")],
+        _           => vec![Some("landscape"), Some("squarish"), Some("portrait")],
     }
 }
 
 /// Attempt to fetch a photo for `target`, trying each orientation in order.
 /// On 404 for a given orientation, moves to the next one.
 /// Rate-limit errors stop immediately. Transient errors are retried with backoff per orientation.
+/// A `None` orientation sends no orientation parameter at all ("all").
 async fn fetch_with_retry(
     client: &UnsplashClient,
     target: Option<&GetterTarget>,
@@ -203,33 +207,34 @@ async fn fetch_with_retry(
     let mut last_err = String::new();
 
     'orientation: for orient in &orientations {
+        let orient_label = orient.unwrap_or("all");
         let mut backoff_ms = BASE_BACKOFF_MS;
 
         for attempt in 0..=MAX_RETRIES {
             if attempt > 0 {
                 log::debug!(
                     "[getter] Retry {}/{} after {}ms (orientation={})",
-                    attempt, MAX_RETRIES, backoff_ms, orient
+                    attempt, MAX_RETRIES, backoff_ms, orient_label
                 );
                 sleep(Duration::from_millis(backoff_ms)).await;
                 backoff_ms = (backoff_ms * BACKOFF_MULTIPLIER).min(MAX_BACKOFF_MS);
             }
 
-            match fetch_for_target(client, target, orient).await {
+            match fetch_for_target(client, target, *orient).await {
                 Ok(photo) => return Ok(photo),
                 Err(e) if e.contains("ERR_RATE_LIMITED") => {
                     log::warn!("[getter] Rate limited, stopping");
                     return Err(e);
                 }
                 Err(e) if e.contains("404") => {
-                    log::info!("[getter] 404 for orientation={}, trying next orientation", orient);
+                    log::info!("[getter] 404 for orientation={}, trying next orientation", orient_label);
                     last_err = e;
                     continue 'orientation;
                 }
                 Err(e) => {
                     log::debug!(
                         "[getter] Transient error on attempt {} (orientation={}): {}",
-                        attempt, orient, e
+                        attempt, orient_label, e
                     );
                     last_err = e;
                 }
@@ -237,7 +242,7 @@ async fn fetch_with_retry(
         }
 
         // Exhausted retries on a transient error for this orientation — give up
-        log::warn!("[getter] Exhausted retries for orientation={}", orient);
+        log::warn!("[getter] Exhausted retries for orientation={}", orient_label);
         break;
     }
 
@@ -281,38 +286,24 @@ async fn fetch_related_photo(client: &UnsplashClient, photo_id: &str) -> Result<
 async fn fetch_for_target(
     client: &UnsplashClient,
     target: Option<&GetterTarget>,
-    orientation: &str,
+    orientation: Option<&str>,
 ) -> Result<ApiPhoto, String> {
-    match target {
-        None => client.get_random_photo(&[("orientation", orientation)]).await,
-        Some(t) => match t.kind.as_str() {
-            "collection" => {
-                client
-                    .get_random_photo(&[("collections", &t.value), ("orientation", orientation)])
-                    .await
-            }
-            "user" => {
-                client
-                    .get_random_photo(&[("username", &t.value), ("orientation", orientation)])
-                    .await
-            }
-            "topic" => {
-                client
-                    .get_random_photo(&[("topics", &t.value), ("orientation", orientation)])
-                    .await
-            }
-            "search" => {
-                client
-                    .get_random_photo(&[("query", &t.value), ("orientation", orientation)])
-                    .await
-            }
-            "color" => {
-                client
-                    .get_random_photo(&[("query", &t.value), ("orientation", orientation)])
-                    .await
-            }
-            "related" => fetch_related_photo(client, &t.value).await,
-            _ => Err(format!("Unknown target type: {}", t.kind)),
-        },
+    // Build the query params: the target filter (if any), plus the
+    // orientation filter — unless orientation is "all" (None), in which
+    // case no orientation parameter is sent at all.
+    let mut params: Vec<(&str, &str)> = Vec::new();
+    if let Some(t) = target {
+        match t.kind.as_str() {
+            "collection" => params.push(("collections", &t.value)),
+            "user" => params.push(("username", &t.value)),
+            "topic" => params.push(("topics", &t.value)),
+            "search" | "color" => params.push(("query", &t.value)),
+            "related" => return fetch_related_photo(client, &t.value).await,
+            _ => return Err(format!("Unknown target type: {}", t.kind)),
+        }
     }
+    if let Some(o) = orientation {
+        params.push(("orientation", o));
+    }
+    client.get_random_photo(&params).await
 }

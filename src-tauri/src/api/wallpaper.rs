@@ -1,6 +1,6 @@
 use crate::fs::paths;
 use crate::unsplash::{AdjacentWallpapers, CurrentWallpaperInfo, WallpaperMeta};
-use crate::wallpaper::{change_wallpaper, prefetch_next_wallpaper, read_meta};
+use crate::wallpaper::{change_wallpaper, prefetch_upcoming_wallpapers, read_meta};
 use tauri::Emitter;
 
 #[tauri::command]
@@ -10,10 +10,10 @@ pub async fn refresh_wallpaper(app: tauri::AppHandle) -> Result<String, String> 
 
     let app2 = app.clone();
     tauri::async_runtime::spawn(async move {
-        log::info!("[wallpaper] Prefetching next wallpaper");
-        match prefetch_next_wallpaper().await {
+        log::info!("[wallpaper] Prefetching upcoming wallpapers");
+        match prefetch_upcoming_wallpapers().await {
             Ok(()) => {
-                log::info!("[wallpaper] Next wallpaper ready");
+                log::info!("[wallpaper] Upcoming wallpapers ready");
                 let _ = app2.emit("next-wallpaper-ready", ());
             }
             Err(e) => log::warn!("[wallpaper] Prefetch failed: {}", e),
@@ -21,6 +21,16 @@ pub async fn refresh_wallpaper(app: tauri::AppHandle) -> Result<String, String> 
     });
 
     Ok(result)
+}
+
+/// Fill the prefetch queue right now (used when the user turns the
+/// prefetch option on or changes its count, so the queue is ready at
+/// once instead of waiting for the next wallpaper change). Prunes slots
+/// above the desired count first — turning the option off collapses the
+/// queue back to a single next wallpaper.
+#[tauri::command]
+pub async fn refill_prefetch_queue() -> Result<(), String> {
+    crate::wallpaper::prefetch_upcoming_wallpapers().await
 }
 
 #[tauri::command]

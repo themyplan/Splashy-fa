@@ -176,6 +176,7 @@ fn main() {
             api::wallpaper::get_current_wallpaper,
             api::wallpaper::get_adjacent_wallpapers,
             api::wallpaper::restore_previous_wallpaper,
+            api::wallpaper::refill_prefetch_queue,
             api::wallpaper::apply_wallpaper_fit,
             api::wallpaper::get_wallpaper_dominant_color,
             api::wallpaper::save_wallpaper_to_folder,

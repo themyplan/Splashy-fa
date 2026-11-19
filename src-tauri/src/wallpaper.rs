@@ -53,6 +53,11 @@ pub async fn change_wallpaper() -> Result<String, String> {
             let _ = std::fs::rename(&next_meta, &current_meta);
         }
 
+        // Shift the queue forward so the next queued photo becomes the
+        // head (slot 2 → slot 1, slot 3 → slot 2, ...). Slots above the
+        // desired count are deleted instead of shifted.
+        shift_queue(&current_dir, crate::settings::effective_prefetch_count(&settings));
+
         set_wallpaper(&current_img, Some(&prev_img))?;
 
         // The prefetched photo only counts as shown now that it is the
@@ -159,34 +164,158 @@ pub async fn restore_previous_wallpaper() -> Result<String, String> {
         .unwrap_or_else(|| "Wallpaper restored!".to_string()))
 }
 
-/// Run a getter cycle and save the result as `next_wallpaper.jpg/.json`.
-/// Exposed publicly so callers can spawn it and emit an event on completion.
-pub async fn prefetch_next_wallpaper() -> Result<(), String> {
-    let settings    = load_settings()?;
-    let client      = crate::unsplash::client_from_active_key()?;
-    let current_dir = paths::current_dir()?;
+// ─── prefetch queue ───────────────────────────────────────────────────
 
+/// Hard cap for queue slots (also the cap for the prefetch-count setting).
+const MAX_QUEUE_SLOTS: usize = 20;
+
+/// Paths of queue slot `n` (1-based). Slot 1 is the historical
+/// `next_wallpaper.jpg` — the head of the queue, which is also what the
+/// Home "next" card and `should_reprefetch_on_enable` look at.
+fn queue_slot_paths(current_dir: &Path, slot: usize) -> (PathBuf, PathBuf) {
+    if slot <= 1 {
+        (
+            current_dir.join("next_wallpaper.jpg"),
+            current_dir.join("next_wallpaper_meta.json"),
+        )
+    } else {
+        (
+            current_dir.join(format!("next_{}_wallpaper.jpg", slot)),
+            current_dir.join(format!("next_{}_wallpaper_meta.json", slot)),
+        )
+    }
+}
+
+/// Photo IDs already sitting in the prefetch queue (read from the slot
+/// metas), so a fill run never queues the same photo twice.
+fn queued_photo_ids(current_dir: &Path) -> std::collections::HashSet<String> {
+    (1..=MAX_QUEUE_SLOTS)
+        .filter_map(|slot| {
+            let (_, meta_path) = queue_slot_paths(current_dir, slot);
+            read_meta(&meta_path).map(|m| m.photo_id)
+        })
+        .collect()
+}
+
+/// Delete queue slots above `desired` (used when the user lowers the
+/// count or turns prefetching off — the queue collapses to one).
+fn prune_queue(current_dir: &Path, desired: usize) {
+    for slot in (desired + 1)..=MAX_QUEUE_SLOTS {
+        let (img, meta) = queue_slot_paths(current_dir, slot);
+        let _ = std::fs::remove_file(&img);
+        let _ = std::fs::remove_file(&meta);
+    }
+}
+
+/// Shift the queue forward after the head was promoted: slot 2 becomes
+/// the head, slot 3 becomes slot 2, and so on. Slots above `desired`
+/// are deleted instead of shifted.
+fn shift_queue(current_dir: &Path, desired: usize) {
+    for slot in 2..=MAX_QUEUE_SLOTS {
+        let (img, meta) = queue_slot_paths(current_dir, slot);
+        if slot <= desired {
+            let (prev_img, prev_meta) = queue_slot_paths(current_dir, slot - 1);
+            if img.exists() {
+                let _ = std::fs::rename(&img, &prev_img);
+            }
+            if meta.exists() {
+                let _ = std::fs::rename(&meta, &prev_meta);
+            }
+        } else {
+            let _ = std::fs::remove_file(&img);
+            let _ = std::fs::remove_file(&meta);
+        }
+    }
+}
+
+/// Fill the first empty queue slot. Returns Ok(true) when a photo was
+/// queued, Ok(false) when the queue is full. A photo already sitting in
+/// the queue is never queued twice: picks are retried a few times
+/// against the queued IDs (the getter itself already skips photos in
+/// the shown history).
+async fn prefetch_one_slot(
+    current_dir: &Path,
+    settings: &Settings,
+    queued: &mut std::collections::HashSet<String>,
+) -> Result<bool, String> {
+    let desired = crate::settings::effective_prefetch_count(settings);
+    let empty_slot = (1..=desired).find(|&slot| {
+        let (img, _) = queue_slot_paths(current_dir, slot);
+        !img.exists()
+    });
+    let Some(slot) = empty_slot else {
+        return Ok(false);
+    };
+
+    let client = crate::unsplash::client_from_active_key()?;
     let next_time = compute_next_fire_time(&settings.wallpaper_cron);
     let time_group = next_time
         .and_then(|t| group_for_hour(&settings.time_groups, t.hour()))
         .map(|g| g.id.clone());
-    let getter = run_getter_cycle(&client, &settings, next_time).await?;
-    let photo  = getter.photo;
 
-    // Prefetch does NOT record the photo in the shown history — only
-    // becoming the wallpaper counts. register_download is likewise
-    // skipped when a saved copy was reused (counted the first time).
-    let dest = current_dir.join("next_wallpaper.jpg");
-    let downloaded = resolve_wallpaper_image(&client, &photo, &settings.quality, &dest, &settings).await?;
-    if downloaded {
-        if let Some(ref dl) = photo.links.download_location {
-            client.register_download(dl).await;
+    let mut last_err = String::new();
+    for _ in 0..5usize {
+        let getter = run_getter_cycle(&client, settings, next_time).await?;
+        let photo = getter.photo;
+        if queued.contains(&photo.id) {
+            log::info!(
+                "[wallpaper] Prefetch pick id={} already queued, retrying",
+                photo.id
+            );
+            last_err = format!("photo {} already queued", photo.id);
+            continue;
+        }
+
+        // Prefetch does NOT record the photo in the shown history — only
+        // becoming the wallpaper counts. register_download is likewise
+        // skipped when a saved copy was reused (counted the first time).
+        let (dest, meta_path) = queue_slot_paths(current_dir, slot);
+        let downloaded =
+            resolve_wallpaper_image(&client, &photo, &settings.quality, &dest, settings).await?;
+        if downloaded {
+            if let Some(ref dl) = photo.links.download_location {
+                client.register_download(dl).await;
+            }
+        }
+
+        let dominant_color = images::dominant_color_hex(&dest).ok();
+        write_meta(
+            &photo,
+            getter.source_type,
+            getter.source_value,
+            time_group,
+            dominant_color,
+            &meta_path,
+        )?;
+        log::info!(
+            "[wallpaper] Prefetched slot {}/{} — photo id={}",
+            slot,
+            desired,
+            photo.id
+        );
+        queued.insert(photo.id);
+        return Ok(true);
+    }
+    Err(last_err)
+}
+
+/// Fill every empty queue slot up to the desired count, and prune slots
+/// above it. Exposed publicly so the scheduler and the re-prefetch task
+/// can call it and emit an event on completion.
+pub async fn prefetch_upcoming_wallpapers() -> Result<(), String> {
+    let settings = load_settings()?;
+    let current_dir = paths::current_dir()?;
+    dirs::ensure_dir(&current_dir)?;
+    let desired = crate::settings::effective_prefetch_count(&settings);
+    prune_queue(&current_dir, desired);
+    let mut queued = queued_photo_ids(&current_dir);
+    loop {
+        match prefetch_one_slot(&current_dir, &settings, &mut queued).await {
+            Ok(true) => continue,
+            Ok(false) => break,
+            Err(e) => return Err(e),
         }
     }
-
-    let dominant_color = images::dominant_color_hex(&dest).ok();
-    write_meta(&photo, getter.source_type, getter.source_value, time_group, dominant_color, &current_dir.join("next_wallpaper_meta.json"))?;
-
     Ok(())
 }
 
@@ -386,36 +515,33 @@ pub fn should_reprefetch_on_enable() -> bool {
     }
 }
 
-/// Check if the prefetched next wallpaper came from `source_type` + `source_value`.
-/// If it matches, delete the next wallpaper files so the scheduler fetches a fresh one.
-/// Returns `true` if the next wallpaper was invalidated.
+/// Check if any queued wallpaper came from `source_type` + `source_value`.
+/// If one matches, delete it (all matching slots) so the scheduler fetches
+/// a fresh one. Returns `true` if anything was invalidated.
 pub fn invalidate_next_if_from_source(source_type: &str, source_value: &str) -> bool {
     let current_dir = match paths::current_dir() {
         Ok(d) => d,
         Err(_) => return false,
     };
-    let meta_path = current_dir.join("next_wallpaper_meta.json");
-    let img_path  = current_dir.join("next_wallpaper.jpg");
-
-    let meta = match read_meta(&meta_path) {
-        Some(m) => m,
-        None => return false,
-    };
-
-    let matches = meta.source_type == source_type
-        && meta.source_value.as_deref() == Some(source_value);
-
-    if matches {
-        let _ = std::fs::remove_file(&img_path);
-        let _ = std::fs::remove_file(&meta_path);
-        log::info!(
-            "[wallpaper] Invalidated next wallpaper — source {}:{} was disabled",
-            source_type, source_value
-        );
-        true
-    } else {
-        false
+    let mut invalidated = false;
+    for slot in 1..=MAX_QUEUE_SLOTS {
+        let (img_path, meta_path) = queue_slot_paths(&current_dir, slot);
+        let Some(meta) = read_meta(&meta_path) else {
+            continue;
+        };
+        if meta.source_type == source_type
+            && meta.source_value.as_deref() == Some(source_value)
+        {
+            let _ = std::fs::remove_file(&img_path);
+            let _ = std::fs::remove_file(&meta_path);
+            log::info!(
+                "[wallpaper] Invalidated queued wallpaper in slot {} — source {}:{} was disabled",
+                slot, source_type, source_value
+            );
+            invalidated = true;
+        }
     }
+    invalidated
 }
 
 /// Compute the local wall-clock time of the next scheduled wallpaper change.
