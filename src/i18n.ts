@@ -18,17 +18,25 @@ export const LANGUAGES: { code: string; label: string }[] = [
 
 const saved = localStorage.getItem("lang") ?? "en";
 
-// Keep <html> in sync with the active language: Persian reads right-to-left,
-// every other language here reads left-to-right. This runs once at startup
-// and again on every language change (e.g. from the Settings picker, which
-// calls i18n.changeLanguage), so no component needs to handle direction.
-function applyDocumentDirection(lng: string) {
-  const rtl = lng === "fa";
-  document.documentElement.dir = rtl ? "rtl" : "ltr";
-  document.documentElement.lang = rtl ? "fa" : lng;
+// The Persian font follows the LANGUAGE, not the page direction: fa.json
+// stays Persian whether the user picks LTR (original layout) or RTL.
+function applyDocumentLanguage(lng: string) {
+  document.documentElement.lang = lng;
 }
 
-applyDocumentDirection(saved);
+// Page direction is the USER's choice (Settings -> layout_direction),
+// independent of language. Default "ltr": the original upstream layout.
+// Stored in localStorage as a mirror so it applies at startup, before
+// the backend settings are loaded (App.tsx re-applies the saved value
+// from settings on every launch).
+export function applyLayoutDirection(dir: string) {
+  const d = dir === "rtl" ? "rtl" : "ltr";
+  document.documentElement.dir = d;
+  localStorage.setItem("layout_direction", d);
+}
+
+applyDocumentLanguage(saved);
+applyLayoutDirection(localStorage.getItem("layout_direction") ?? "ltr");
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -41,6 +49,6 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 });
 
-i18n.on("languageChanged", applyDocumentDirection);
+i18n.on("languageChanged", applyDocumentLanguage);
 
 export default i18n;

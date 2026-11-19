@@ -5,7 +5,8 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { ApiKeyEntry, ApiKeySaveEntry, AppSettings, RateLimitStatus } from "../types";
-import { LANGUAGES } from "../i18n";
+import { LANGUAGES, applyLayoutDirection } from "../i18n";
+import { DEFAULT_API_BASE_URL } from "../constants";
 import CronScheduler from "../components/CronScheduler";
 import Toggle from "../components/Toggle";
 
@@ -91,6 +92,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const [rateLimit, setRateLimit] = useState<RateLimitStatus | null>(null);
   const [apiKeysError, setApiKeysError] = useState<string | null>(null);
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
+  const [layoutDirection, setLayoutDirection] = useState<"ltr" | "rtl">("ltr");
   const [version, setVersion] = useState("");
 
   const BASIC_OPTIONS = [
@@ -128,6 +131,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
         setQuality(s.quality);
         setOrientation(s.orientation);
         setCron(s.wallpaper_cron);
+        setApiBaseUrl(s.api_base_url || DEFAULT_API_BASE_URL);
+        setLayoutDirection(s.layout_direction === "rtl" ? "rtl" : "ltr");
         setScheduleTab(BASIC_CRONS.has(s.wallpaper_cron) || isOnceDailyCron(s.wallpaper_cron) ? "basic" : "advanced");
         setStartOnLogin(autostart);
         setApiKeys(toRows(keys));
@@ -295,9 +300,9 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   };
 
-  const persistSettings = useCallback(async (q: string, o: string, c: string) => {
+  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string) => {
     try {
-      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c });
+      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setSaved(true);
       savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
@@ -306,9 +311,23 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   }, []);
 
-  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron); };
-  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron); };
-  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr); };
+  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection); };
+  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection); };
+  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection); };
+
+  // Server address: empty means the relay default. Applies on blur/Enter.
+  const handleApiBaseUrlSave = () => {
+    const v = apiBaseUrl.trim();
+    if (!v) setApiBaseUrl(DEFAULT_API_BASE_URL);
+    persistSettings(quality, orientation, cron, v, layoutDirection);
+  };
+
+  // Page direction: applies immediately, no restart needed.
+  const handleLayoutDirectionChange = (dir: "ltr" | "rtl") => {
+    setLayoutDirection(dir);
+    applyLayoutDirection(dir);
+    persistSettings(quality, orientation, cron, apiBaseUrl, dir);
+  };
 
   const handleLanguageChange = (code: string) => {
     i18n.changeLanguage(code);
@@ -533,7 +552,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
         {/* ── Language ──────────────────────────────────────────────────── */}
         <section>
           <SectionHeader>{t("settings.sectionLanguage")}</SectionHeader>
-          <div className="bg-white/4 rounded-2xl border border-white/8 p-4">
+          <div className="bg-white/4 rounded-2xl border border-white/8 p-4 flex flex-col gap-4">
             <div className="flex gap-2 flex-wrap">
               {LANGUAGES.map(lang => (
                 <button
@@ -548,6 +567,27 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                   {lang.label}
                 </button>
               ))}
+            </div>
+
+            {/* Page direction: LTR = original upstream layout (default),
+                RTL = mirrored. Applies immediately. */}
+            <div>
+              <p className="text-sm font-medium text-white/70 mb-2">{t("settings.layoutDirection")}</p>
+              <div className="flex gap-2 flex-wrap">
+                {(["ltr", "rtl"] as const).map(dir => (
+                  <button
+                    key={dir}
+                    onClick={() => handleLayoutDirectionChange(dir)}
+                    className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
+                      layoutDirection === dir
+                        ? "border-white/25 bg-white/10 text-white"
+                        : "border-white/8 bg-white/4 text-white/60 hover:border-white/18 hover:text-white"
+                    }`}
+                  >
+                    {dir === "ltr" ? t("settings.directionLtr") : t("settings.directionRtl")}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -642,6 +682,24 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
               >
                 {t("settings.apiKeys.addKey")}
               </button>
+            </div>
+
+            {/* Server address (Sonora-style): requests go through this
+                server instead of Unsplash directly, so the app works
+                without a VPN. Empty = default relay. */}
+            <div className="border-t border-white/8 pt-3">
+              <p className="text-sm font-medium text-white/70 mb-1">{t("settings.serverAddress")}</p>
+              <p className="text-xs text-white/60 mb-2">{t("settings.serverAddressDesc")}</p>
+              <input
+                type="text"
+                dir="ltr"
+                value={apiBaseUrl}
+                onChange={(e) => setApiBaseUrl(e.target.value)}
+                onBlur={handleApiBaseUrlSave}
+                onKeyDown={(e) => e.key === "Enter" && handleApiBaseUrlSave()}
+                placeholder={DEFAULT_API_BASE_URL}
+                className="w-full min-w-0 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 transition-colors font-mono"
+              />
             </div>
           </div>
         </section>

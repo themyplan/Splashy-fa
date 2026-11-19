@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { View } from "./types";
+import { View, AppSettings } from "./types";
 import Sidebar from "./components/Sidebar";
 import ApiKeySetup from "./components/ApiKeySetup";
 import HomeView from "./views/HomeView";
@@ -15,6 +15,7 @@ import RelatedView from "./views/RelatedView";
 import SettingsView from "./views/SettingsView";
 import TitleBar from "./components/TitleBar";
 import UpdatePrompt from "./components/UpdatePrompt";
+import { applyLayoutDirection } from "./i18n";
 
 function computeBrightness(url: string): Promise<number> {
   return new Promise((resolve) => {
@@ -60,6 +61,10 @@ export default function App() {
     invoke<string | null>("get_api_key")
       .then((key) => setHasApiKey(key !== null))
       .catch(() => setHasApiKey(false));
+    // Apply the saved page direction (default LTR = original layout).
+    invoke<AppSettings>("get_settings")
+      .then((s) => applyLayoutDirection(s.layout_direction))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

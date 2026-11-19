@@ -124,7 +124,7 @@ pub async fn import_collection(id: String) -> Result<CollectionSummary, String> 
         .cover_photo
         .as_ref()
         .and_then(|p| p.urls.regular.clone().or_else(|| p.urls.small.clone()))
-        .map(|u| crate::unsplash::relay_url(&u));
+        .map(|u| crate::unsplash::current_relay_url(&u));
 
     let author_name = collection.user.as_ref().map(|u| u.name.clone());
     let author_username = collection.user.as_ref().map(|u| u.username.clone());

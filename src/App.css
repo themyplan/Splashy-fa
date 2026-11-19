@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-/* ── Persian font + RTL ─────────────────────────────────────────────────── */
+/* ── Persian font + direction ───────────────────────────────────────────── */
 /* Vazirmatn is bundled via @fontsource/vazirmatn (imported in main.tsx).
-   It applies only when the UI is right-to-left, so the English/Romanian UI
-   keeps its current look. Tahoma is the fallback if the webfont fails. */
-[dir="rtl"] body {
+   It follows the LANGUAGE (lang="fa"), not the page direction: Persian
+   text keeps its font whether the user picks LTR (original layout) or
+   RTL. Tahoma is the fallback if the webfont fails. */
+[lang="fa"] body {
   font-family: "Vazirmatn", Tahoma, "Segoe UI", sans-serif;
 }
 

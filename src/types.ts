@@ -5,6 +5,10 @@ export interface AppSettings {
   orientation: string;
   wallpaper_cron: string;
   api_key: string | null;
+  /** Base URL of the Unsplash server (default: the Cloudflare relay). */
+  api_base_url: string;
+  /** Page direction: "ltr" (original layout) or "rtl". */
+  layout_direction: string;
 }
 
 /// One saved Unsplash API key as returned by `get_api_keys`.

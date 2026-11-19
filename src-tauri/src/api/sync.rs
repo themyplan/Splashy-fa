@@ -195,7 +195,7 @@ async fn poll_one_collection(client: &UnsplashClient, id: &str, now: &str) -> Re
                                 let _ = std::fs::remove_file(&old);
                             }
                         }
-                        Some(crate::unsplash::relay_url(url))
+                        Some(crate::unsplash::current_relay_url(url))
                     } else {
                         meta.cover_url.clone()
                     }

@@ -15,6 +15,8 @@ pub struct AppSettings {
     pub orientation: String,
     pub wallpaper_cron: String,
     pub api_key: Option<String>,
+    pub api_base_url: String,
+    pub layout_direction: String,
 }
 
 /// One saved key as the frontend is allowed to see it: the full key is
@@ -74,12 +76,17 @@ fn next_label(settings: &crate::settings::Settings) -> String {
 /// about to become) the active key — otherwise the probe would overwrite
 /// the active key's stored numbers with another key's.
 async fn probe_key(key: &str, entry_id: &str, record: bool) -> Result<(), String> {
+    // Probe through the configured server base (Settings `api_base_url`,
+    // relay by default) — same route the client uses.
+    let base = load_settings()
+        .map(|s| crate::settings::effective_api_base_url(&s))
+        .unwrap_or_else(|_| crate::unsplash::RELAY_BASE.to_string());
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
     let resp = client
-        .get("https://unsplash-relay.a44410527.workers.dev/api/photos")
+        .get(crate::unsplash::api_url_with_base("photos", &base))
         .query(&[("per_page", "1")])
         .header("Authorization", format!("Client-ID {}", key))
         .send()
@@ -106,11 +113,15 @@ pub async fn get_settings() -> Result<AppSettings, String> {
     let api_key = active_api_key(&s)
         .map(|e| e.key.clone())
         .or_else(|| s.api_key.clone());
+    let api_base_url = crate::settings::effective_api_base_url(&s);
+    let layout_direction = s.layout_direction.clone();
     Ok(AppSettings {
         quality: s.quality,
         orientation: s.orientation,
         wallpaper_cron: s.wallpaper_cron,
         api_key,
+        api_base_url,
+        layout_direction,
     })
 }
 
@@ -304,6 +315,8 @@ pub async fn update_settings(
     quality: String,
     orientation: String,
     wallpaper_cron: String,
+    api_base_url: String,
+    layout_direction: String,
 ) -> Result<(), String> {
     let valid_qualities = ["raw", "full", "regular", "small", "thumb"];
     if !valid_qualities.contains(&quality.as_str()) {
@@ -315,10 +328,26 @@ pub async fn update_settings(
     }
     validate_cron(&wallpaper_cron)?;
 
+    // Server address: empty means the relay default; anything else must
+    // be an http(s) URL. Direction: only "ltr" / "rtl".
+    let base = api_base_url.trim().trim_end_matches('/').to_string();
+    let api_base_url = if base.is_empty() {
+        crate::unsplash::RELAY_BASE.to_string()
+    } else if base.starts_with("http://") || base.starts_with("https://") {
+        base
+    } else {
+        return Err("Invalid server address: must start with http:// or https://".to_string());
+    };
+    if layout_direction != "ltr" && layout_direction != "rtl" {
+        return Err(format!("Invalid layout direction: {}", layout_direction));
+    }
+
     let mut s = load_settings()?;
     s.quality = quality;
     s.orientation = orientation;
     s.wallpaper_cron = wallpaper_cron.clone();
+    s.api_base_url = api_base_url;
+    s.layout_direction = layout_direction;
     save_settings(&s)?;
 
     notify_cron_changed(wallpaper_cron);

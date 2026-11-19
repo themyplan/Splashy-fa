@@ -79,25 +79,55 @@ pub fn reset_rate_limit() {
 /// so rate-limit counting keeps working. No key lives in the Worker.
 pub const RELAY_BASE: &str = "https://unsplash-relay.a44410527.workers.dev";
 
-/// Rewrite an Unsplash URL to its relay equivalent. Idempotent: a URL
-/// that already points at the relay is returned unchanged, and
-/// non-Unsplash URLs (e.g. unsplash.com web pages) pass through.
-pub fn relay_url(url: &str) -> String {
+/// Rewrite an Unsplash URL to its relay equivalent against a configured
+/// base URL (Sonora-style: the base is a Settings field, defaulting to
+/// the relay). Idempotent: a URL that already points at the base is
+/// returned unchanged, and non-Unsplash URLs (e.g. unsplash.com web
+/// pages) pass through.
+pub fn relay_url_with_base(url: &str, base: &str) -> String {
+    let base = base.trim_end_matches('/');
     if let Some(rest) = url.strip_prefix("https://api.unsplash.com/") {
-        return format!("{RELAY_BASE}/api/{rest}");
+        return format!("{base}/api/{rest}");
     }
     if url == "https://api.unsplash.com" {
-        return format!("{RELAY_BASE}/api");
+        return format!("{base}/api");
     }
     if let Some(rest) = url.strip_prefix("https://images.unsplash.com/") {
-        return format!("{RELAY_BASE}/img/{rest}");
+        return format!("{base}/img/{rest}");
     }
     url.to_string()
 }
 
+/// API endpoint URL against a configured base URL, e.g.
+/// api_url_with_base("photos/random", base).
+pub fn api_url_with_base(path: &str, base: &str) -> String {
+    format!(
+        "{}/api/{}",
+        base.trim_end_matches('/'),
+        path.trim_start_matches('/')
+    )
+}
+
+/// Rewrite using the base URL from settings (relay default when the
+/// settings file cannot be read). Used for cover URLs stored outside the
+/// UnsplashClient (collections/topics/sync).
+pub fn current_relay_url(url: &str) -> String {
+    let base = crate::settings::load_settings()
+        .map(|s| crate::settings::effective_api_base_url(&s))
+        .unwrap_or_else(|_| RELAY_BASE.to_string());
+    relay_url_with_base(url, &base)
+}
+
+/// Rewrite an Unsplash URL to its relay equivalent (default relay base).
+/// Idempotent: a URL that already points at the relay is returned unchanged, and
+/// non-Unsplash URLs (e.g. unsplash.com web pages) pass through.
+pub fn relay_url(url: &str) -> String {
+    relay_url_with_base(url, RELAY_BASE)
+}
+
 /// API endpoint URL through the relay, e.g. api_url("photos/random").
 pub fn api_url(path: &str) -> String {
-    format!("{RELAY_BASE}/api/{}", path.trim_start_matches('/'))
+    api_url_with_base(path, RELAY_BASE)
 }
 
 /// Build a client using the ACTIVE API key from settings.
@@ -110,9 +140,11 @@ pub fn client_from_active_key() -> Result<UnsplashClient, String> {
     let entry = crate::settings::active_api_key(&settings).ok_or_else(|| {
         "ERR_NO_API_KEY: No Unsplash API key configured. Please add your key in Settings.".to_string()
     })?;
-    Ok(UnsplashClient::new_with_id(
+    let base = crate::settings::effective_api_base_url(&settings);
+    Ok(UnsplashClient::new_with_id_and_base(
         entry.key.clone(),
         Some(entry.id.clone()),
+        base,
     ))
 }
 

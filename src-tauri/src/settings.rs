@@ -83,12 +83,34 @@ pub struct Settings {
     /// Id of the entry in `api_keys` used for all Unsplash calls.
     #[serde(default)]
     pub active_api_key_id: Option<String>,
+    /// Base URL of the Unsplash server the app talks to. Default is the
+    /// Cloudflare relay (Unsplash is unreachable from Iran without a VPN).
+    /// Editable in Settings, Sonora-style; an empty value falls back to
+    /// the relay default — never silently to direct api.unsplash.com.
+    #[serde(default = "default_api_base_url")]
+    pub api_base_url: String,
+    /// Page direction: "ltr" (the original upstream layout) or "rtl".
+    /// Default "ltr"; the user picks RTL in Settings if wanted.
+    #[serde(default = "default_layout_direction")]
+    pub layout_direction: String,
 }
 
 fn default_wallpaper_cron() -> String { "0 * * * *".to_string() }
 fn default_storage_limit() -> u64 { 500 }
 fn default_orientation() -> String { "landscape".to_string() }
 fn default_quality() -> String { "regular".to_string() }
+fn default_api_base_url() -> String { crate::unsplash::RELAY_BASE.to_string() }
+fn default_layout_direction() -> String { "ltr".to_string() }
+
+/// Effective server base URL (never empty — falls back to the relay).
+pub fn effective_api_base_url(settings: &Settings) -> String {
+    let base = settings.api_base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        default_api_base_url()
+    } else {
+        base.to_string()
+    }
+}
 
 impl Default for Settings {
     fn default() -> Self {
@@ -102,6 +124,8 @@ impl Default for Settings {
             api_key: option_env!("UNSPLASH_ACCESS_KEY").map(|s| s.to_string()),
             api_keys: vec![],
             active_api_key_id: None,
+            api_base_url: default_api_base_url(),
+            layout_direction: "ltr".to_string(),
         }
     }
 }
@@ -163,6 +187,14 @@ pub fn load_settings() -> Result<Settings, String> {
         }
     } else {
         settings.active_api_key_id = None;
+    }
+
+    // Normalize the server address and direction: an empty address falls
+    // back to the relay default (never to direct api.unsplash.com), and
+    // anything but "rtl" means "ltr" (the original upstream layout).
+    settings.api_base_url = effective_api_base_url(&settings);
+    if settings.layout_direction != "rtl" {
+        settings.layout_direction = "ltr".to_string();
     }
 
     // One-time migration: if all groups are empty but targets exist, populate all groups.
