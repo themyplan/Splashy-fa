@@ -18,12 +18,58 @@ pub struct GetterResult {
     pub source_value: Option<String>,
 }
 
+/// How many already-shown photos in a row are tolerated before the pool
+/// is treated as exhausted (all photos shown) and a new cycle starts.
+/// Each attempt is one full getter cycle = one Unsplash random call in
+/// the common case, so 10 attempts cost ~10 API calls at most.
+const MAX_UNSEEN_ATTEMPTS: usize = 10;
+
+/// Select a random photo according to the getter_targets in settings,
+/// skipping photos that were already shown as wallpaper — until the
+/// pool is exhausted. History is global by photo ID, across all
+/// sources, and lives in `shown_history.json` (see shown_history.rs).
+/// When MAX_UNSEEN_ATTEMPTS consecutive fetches all return already-shown
+/// photos, the pool is treated as exhausted: the history is cleared and
+/// the last photo is accepted, starting a new cycle from the beginning.
+/// A photo saved in the save folder is reused from disk then, so the
+/// new cycle costs no re-download. Rate-limit errors abort immediately
+/// (they are not retried as "seen" photos).
+pub async fn run_getter_cycle(
+    client: &UnsplashClient,
+    settings: &Settings,
+    at: Option<NaiveTime>,
+) -> Result<GetterResult, String> {
+    let mut last: Option<GetterResult> = None;
+    for attempt in 1..=MAX_UNSEEN_ATTEMPTS {
+        let result = run_getter_cycle_once(client, settings, at).await?;
+        if !crate::shown_history::is_shown(&result.photo.id) {
+            return Ok(result);
+        }
+        log::info!(
+            "[getter] Photo id={} already shown, retrying for an unseen photo ({}/{})",
+            result.photo.id,
+            attempt,
+            MAX_UNSEEN_ATTEMPTS
+        );
+        last = Some(result);
+    }
+
+    // Every attempt returned an already-shown photo: the pool is
+    // exhausted — start a new cycle from the beginning.
+    log::warn!(
+        "[getter] {} consecutive already-shown photos — pool exhausted, starting a new cycle",
+        MAX_UNSEEN_ATTEMPTS
+    );
+    crate::shown_history::clear();
+    Ok(last.expect("loop ran at least once, so `last` is set"))
+}
+
 /// Select a random photo according to the getter_targets in settings.
 /// `at` — when provided, restricts candidates to those in the matching time group.
 ///         Falls back to all enabled targets if the group is empty or no group matches.
 /// Falls back to a random photo only when no targets are configured/enabled.
 /// If targets are configured but all fail, returns an error.
-pub async fn run_getter_cycle(
+async fn run_getter_cycle_once(
     client: &UnsplashClient,
     settings: &Settings,
     at: Option<NaiveTime>,

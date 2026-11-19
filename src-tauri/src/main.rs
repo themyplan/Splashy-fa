@@ -8,6 +8,7 @@ mod fs;
 mod getter;
 mod scheduler;
 mod settings;
+mod shown_history;
 mod unsplash;
 mod wallpaper;
 

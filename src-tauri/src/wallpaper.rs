@@ -1,9 +1,10 @@
 use crate::fs::{dirs, files, images, paths};
 use crate::getter::run_getter_cycle;
-use crate::settings::{group_for_hour, load_settings};
+use crate::settings::{group_for_hour, load_settings, Settings};
 use crate::unsplash::{ApiPhoto, UnsplashClient, WallpaperMeta};
 use chrono::{Local, NaiveTime, Timelike, Utc};
 use cron::Schedule;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -54,6 +55,12 @@ pub async fn change_wallpaper() -> Result<String, String> {
 
         set_wallpaper(&current_img, Some(&prev_img))?;
 
+        // The prefetched photo only counts as shown now that it is the
+        // wallpaper — prefetch alone must not burn its one showing.
+        if let Some(meta) = read_meta(&current_meta) {
+            crate::shown_history::record(&meta.photo_id);
+        }
+
         result_msg = read_meta(&current_meta)
             .map(|m| format!("Wallpaper set!\nPhoto by {} — https://unsplash.com/photos/{}", m.author_name, m.photo_id))
             .unwrap_or_else(|| "Wallpaper set!".to_string());
@@ -74,15 +81,23 @@ pub async fn change_wallpaper() -> Result<String, String> {
         let photo  = getter.photo;
         log::info!("[wallpaper] Photo: id={} source={}:{} group={:?}", photo.id, getter.source_type, getter.source_value.as_deref().unwrap_or("random"), time_group);
 
-        if let Some(ref dl) = photo.links.download_location {
-            client.register_download(dl).await;
+        // Only count the download with Unsplash when the image bytes
+        // actually came from the network — a reused saved copy was
+        // already counted the first time it was downloaded.
+        let downloaded = resolve_wallpaper_image(&client, &photo, &settings.quality, &current_img, &settings).await?;
+        if downloaded {
+            if let Some(ref dl) = photo.links.download_location {
+                client.register_download(dl).await;
+            }
         }
 
-        download_wallpaper_to_path(&client, &photo, &settings.quality, &current_img).await?;
         let dominant_color = images::dominant_color_hex(&current_img).ok();
         write_meta(&photo, getter.source_type, getter.source_value, time_group, dominant_color, &current_meta)?;
 
         set_wallpaper(&current_img, Some(&prev_img))?;
+        // Record AFTER the wallpaper is actually set, so a failed
+        // change never burns the photo's one showing.
+        crate::shown_history::record(&photo.id);
         log::info!("[wallpaper] Wallpaper set — photo by @{}", photo.user.username);
         result_msg = format!(
             "Wallpaper set!\nPhoto by {} — https://unsplash.com/photos/{}",
@@ -158,16 +173,124 @@ pub async fn prefetch_next_wallpaper() -> Result<(), String> {
     let getter = run_getter_cycle(&client, &settings, next_time).await?;
     let photo  = getter.photo;
 
-    if let Some(ref dl) = photo.links.download_location {
-        client.register_download(dl).await;
+    // Prefetch does NOT record the photo in the shown history — only
+    // becoming the wallpaper counts. register_download is likewise
+    // skipped when a saved copy was reused (counted the first time).
+    let dest = current_dir.join("next_wallpaper.jpg");
+    let downloaded = resolve_wallpaper_image(&client, &photo, &settings.quality, &dest, &settings).await?;
+    if downloaded {
+        if let Some(ref dl) = photo.links.download_location {
+            client.register_download(dl).await;
+        }
     }
 
-    let dest = current_dir.join("next_wallpaper.jpg");
-    download_wallpaper_to_path(&client, &photo, &settings.quality, &dest).await?;
     let dominant_color = images::dominant_color_hex(&dest).ok();
     write_meta(&photo, getter.source_type, getter.source_value, time_group, dominant_color, &current_dir.join("next_wallpaper_meta.json"))?;
 
     Ok(())
+}
+
+// ─── save-to-folder ───────────────────────────────────────────────────────
+
+/// Folder where wallpapers are saved when `save_wallpapers` is on.
+/// None when the feature is off or no folder has been chosen yet.
+fn save_folder(settings: &Settings) -> Option<PathBuf> {
+    if !settings.save_wallpapers {
+        return None;
+    }
+    let folder = settings.wallpaper_save_folder.trim();
+    if folder.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(folder))
+    }
+}
+
+fn saved_image_path(folder: &Path, photo_id: &str) -> PathBuf {
+    folder.join(format!("{}.jpg", photo_id))
+}
+
+fn saved_meta_path(folder: &Path, photo_id: &str) -> PathBuf {
+    folder.join(format!("{}.json", photo_id))
+}
+
+/// Small sidecar written next to each saved wallpaper copy, so the app
+/// knows at which quality the copy was saved. A copy saved at another
+/// quality is NOT reused — the photo is downloaded again at the current
+/// quality and the saved copy is overwritten.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SavedCopyMeta {
+    photo_id: String,
+    quality: String,
+    author_name: String,
+    unsplash_url: String,
+    saved_iso: String,
+}
+
+fn saved_quality_matches(folder: &Path, photo_id: &str, quality: &str) -> bool {
+    std::fs::read(saved_meta_path(folder, photo_id))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<SavedCopyMeta>(&b).ok())
+        .map(|m| m.quality == quality)
+        .unwrap_or(false)
+}
+
+/// Save a copy of the wallpaper at `src` into the save folder
+/// (`<photo_id>.jpg` + `<photo_id>.json`). Best-effort helper: returns
+/// Err on failure, callers only log it — saving must never break
+/// setting the wallpaper. Nothing is ever deleted from the save folder.
+fn save_wallpaper_copy(folder: &Path, photo: &ApiPhoto, quality: &str, src: &Path) -> Result<(), String> {
+    dirs::ensure_dir(folder)?;
+    let dest = saved_image_path(folder, &photo.id);
+    std::fs::copy(src, &dest)
+        .map_err(|e| format!("Failed to copy wallpaper to {}: {}", dest.display(), e))?;
+    let meta = SavedCopyMeta {
+        photo_id: photo.id.clone(),
+        quality: quality.to_string(),
+        author_name: photo.user.name.clone(),
+        unsplash_url: format!("https://unsplash.com/photos/{}", photo.id),
+        saved_iso: Utc::now().to_rfc3339(),
+    };
+    let bytes = serde_json::to_vec_pretty(&meta)
+        .map_err(|e| format!("Failed to serialize saved copy meta: {}", e))?;
+    files::write_atomic(&saved_meta_path(folder, &photo.id), &bytes)
+}
+
+/// Resolve the image bytes for `photo` into `dest`.
+/// When saving is on and a copy of this photo (same quality) already
+/// exists in the save folder, the local copy is used instead of
+/// downloading. Otherwise the image is downloaded and a copy is saved
+/// (best-effort) for next time.
+/// Returns Ok(true) when the bytes came from the network, Ok(false)
+/// when a saved local copy was reused.
+pub async fn resolve_wallpaper_image(
+    client: &UnsplashClient,
+    photo: &ApiPhoto,
+    quality: &str,
+    dest: &Path,
+    settings: &Settings,
+) -> Result<bool, String> {
+    if let Some(folder) = save_folder(settings) {
+        let saved = saved_image_path(&folder, &photo.id);
+        if saved.exists() && saved_quality_matches(&folder, &photo.id, quality) {
+            if let Some(parent) = dest.parent() {
+                dirs::ensure_dir(parent)?;
+            }
+            std::fs::copy(&saved, dest)
+                .map_err(|e| format!("Failed to reuse saved wallpaper: {}", e))?;
+            log::info!("[wallpaper] Reused saved copy of photo {} (no download)", photo.id);
+            return Ok(false);
+        }
+    }
+
+    download_wallpaper_to_path(client, photo, quality, dest).await?;
+
+    if let Some(folder) = save_folder(settings) {
+        if let Err(e) = save_wallpaper_copy(&folder, photo, quality, dest) {
+            log::warn!("[wallpaper] Could not save wallpaper copy: {}", e);
+        }
+    }
+    Ok(true)
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

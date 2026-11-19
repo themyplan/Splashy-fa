@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import { open } from "@tauri-apps/plugin-dialog";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { useTranslation } from "react-i18next";
 import { ApiKeyEntry, ApiKeySaveEntry, AppSettings, RateLimitStatus } from "../types";
@@ -92,6 +93,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [layoutDirection, setLayoutDirection] = useState<"ltr" | "rtl">("ltr");
   const [wallpaperFit, setWallpaperFit] = useState("fill");
+  const [saveWallpapers, setSaveWallpapers] = useState(false);
+  const [wallpaperSaveFolder, setWallpaperSaveFolder] = useState("");
   const [version, setVersion] = useState("");
 
   const BASIC_OPTIONS = [
@@ -141,6 +144,8 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
         setApiBaseUrl(s.api_base_url || DEFAULT_API_BASE_URL);
         setLayoutDirection(s.layout_direction === "rtl" ? "rtl" : "ltr");
         setWallpaperFit(["fill", "fit", "stretch", "tile", "center", "span"].includes(s.wallpaper_fit) ? s.wallpaper_fit : "fill");
+        setSaveWallpapers(s.save_wallpapers === true);
+        setWallpaperSaveFolder(s.wallpaper_save_folder || "");
         setScheduleTab(BASIC_CRONS.has(s.wallpaper_cron) || isOnceDailyCron(s.wallpaper_cron) ? "basic" : "advanced");
         setStartOnLogin(autostart);
         setApiKeys(toRows(keys));
@@ -308,9 +313,9 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   };
 
-  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string) => {
+  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string, save: boolean, folder: string) => {
     try {
-      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit });
+      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit, saveWallpapers: save, wallpaperSaveFolder: folder });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setSaved(true);
       savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
@@ -319,22 +324,22 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   }, []);
 
-  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit); };
-  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit); };
-  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit); };
+  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder); };
+  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder); };
+  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder); };
 
   // Server address: empty means the relay default. Applies on blur/Enter.
   const handleApiBaseUrlSave = () => {
     const v = apiBaseUrl.trim();
     if (!v) setApiBaseUrl(DEFAULT_API_BASE_URL);
-    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit);
+    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit, saveWallpapers, wallpaperSaveFolder);
   };
 
   // Page direction: applies immediately, no restart needed.
   const handleLayoutDirectionChange = (dir: "ltr" | "rtl") => {
     setLayoutDirection(dir);
     applyLayoutDirection(dir);
-    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit);
+    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit, saveWallpapers, wallpaperSaveFolder);
   };
 
   // Wallpaper fit: saved, then applied at once to the current desktop
@@ -343,8 +348,24 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   // when no wallpaper is set yet.
   const handleWallpaperFitChange = async (v: string) => {
     setWallpaperFit(v);
-    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v);
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v, saveWallpapers, wallpaperSaveFolder);
     try { await invoke("apply_wallpaper_fit"); } catch { /* no wallpaper set yet */ }
+  };
+
+  // Save wallpapers to a folder: the toggle and the folder are saved
+  // together; without a folder the feature stays inactive.
+  const handleSaveWallpapersToggle = (checked: boolean) => {
+    setSaveWallpapers(checked);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, checked, wallpaperSaveFolder);
+  };
+
+  const handleChooseSaveFolder = async () => {
+    const folder = await open({ directory: true, multiple: false, title: t("home.chooseFolderTitle") });
+    if (!folder) return;
+    const path = Array.isArray(folder) ? folder[0] : folder;
+    if (!path) return;
+    setWallpaperSaveFolder(path);
+    persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit, saveWallpapers, path);
   };
 
   const handleLanguageChange = (code: string) => {
@@ -456,6 +477,32 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="border-t border-white/8" />
+
+            {/* Save wallpapers to a folder */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white/70">{t("settings.saveWallpapers")}</p>
+                  <p className="text-xs text-white/50 mt-0.5">{t("settings.saveWallpapersDesc")}</p>
+                </div>
+                <Toggle enabled={saveWallpapers} onChange={handleSaveWallpapersToggle} />
+              </div>
+              {saveWallpapers && (
+                <div className="flex items-center gap-2 mt-3">
+                  <p className="flex-1 truncate text-xs text-white/60 px-3 py-2 rounded-lg bg-white/4 border border-white/8" dir="auto">
+                    {wallpaperSaveFolder || t("settings.noFolderChosen")}
+                  </p>
+                  <button
+                    onClick={handleChooseSaveFolder}
+                    className="px-3 py-2 rounded-lg border border-white/25 bg-white/10 text-xs font-medium text-white cursor-pointer transition-all hover:border-white/40 shrink-0"
+                  >
+                    {t("settings.chooseFolder")}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </section>

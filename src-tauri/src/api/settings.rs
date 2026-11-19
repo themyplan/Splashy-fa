@@ -18,6 +18,8 @@ pub struct AppSettings {
     pub api_base_url: String,
     pub layout_direction: String,
     pub wallpaper_fit: String,
+    pub save_wallpapers: bool,
+    pub wallpaper_save_folder: String,
 }
 
 /// One saved key as the frontend is allowed to see it: the full key is
@@ -117,6 +119,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
     let api_base_url = crate::settings::effective_api_base_url(&s);
     let layout_direction = s.layout_direction.clone();
     let wallpaper_fit = crate::settings::effective_wallpaper_fit(&s);
+    let save_wallpapers = s.save_wallpapers;
+    let wallpaper_save_folder = s.wallpaper_save_folder.clone();
     Ok(AppSettings {
         quality: s.quality,
         orientation: s.orientation,
@@ -125,6 +129,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
         api_base_url,
         layout_direction,
         wallpaper_fit,
+        save_wallpapers,
+        wallpaper_save_folder,
     })
 }
 
@@ -321,6 +327,8 @@ pub async fn update_settings(
     api_base_url: String,
     layout_direction: String,
     wallpaper_fit: String,
+    save_wallpapers: bool,
+    wallpaper_save_folder: String,
 ) -> Result<(), String> {
     let valid_qualities = ["raw", "full", "regular", "small", "thumb"];
     if !valid_qualities.contains(&quality.as_str()) {
@@ -357,6 +365,10 @@ pub async fn update_settings(
     s.api_base_url = api_base_url;
     s.layout_direction = layout_direction;
     s.wallpaper_fit = wallpaper_fit;
+    // Save-to-folder: no validation beyond trimming — an empty folder
+    // just keeps the feature inactive until one is picked.
+    s.save_wallpapers = save_wallpapers;
+    s.wallpaper_save_folder = wallpaper_save_folder.trim().to_string();
     save_settings(&s)?;
 
     notify_cron_changed(wallpaper_cron);

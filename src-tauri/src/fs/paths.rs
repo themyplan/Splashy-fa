@@ -35,6 +35,12 @@ pub fn settings_file() -> Result<PathBuf, String> {
     Ok(root_dir()?.join("settings.json"))
 }
 
+/// History of shown photo IDs (see shown_history.rs). Kept in its own
+/// file, NOT inside settings.json, so settings stay small.
+pub fn shown_history_file() -> Result<PathBuf, String> {
+    Ok(root_dir()?.join("shown_history.json"))
+}
+
 pub fn related_dir() -> Result<PathBuf, String> {
     Ok(root_dir()?.join("related"))
 }

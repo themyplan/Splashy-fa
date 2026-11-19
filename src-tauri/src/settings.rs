@@ -99,6 +99,15 @@ pub struct Settings {
     /// 1.0.7-5, which overwrote the user's registry edit on each change.
     #[serde(default = "default_wallpaper_fit")]
     pub wallpaper_fit: String,
+    /// Save every wallpaper that gets set into a folder, so a photo that
+    /// comes again is reused from disk instead of downloaded again.
+    /// Default OFF.
+    #[serde(default)]
+    pub save_wallpapers: bool,
+    /// Folder used when `save_wallpapers` is on. Empty = no folder
+    /// chosen yet; the feature stays inactive until one is picked.
+    #[serde(default)]
+    pub wallpaper_save_folder: String,
 }
 
 fn default_wallpaper_cron() -> String { "0 * * * *".to_string() }
@@ -145,6 +154,8 @@ impl Default for Settings {
             api_base_url: default_api_base_url(),
             layout_direction: "ltr".to_string(),
             wallpaper_fit: "fill".to_string(),
+            save_wallpapers: false,
+            wallpaper_save_folder: String::new(),
         }
     }
 }

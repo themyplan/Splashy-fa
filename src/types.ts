@@ -11,6 +11,10 @@ export interface AppSettings {
   layout_direction: string;
   /** Wallpaper fit: "fill" | "fit" | "stretch" | "tile" | "center" | "span". */
   wallpaper_fit: string;
+  /** Save every wallpaper that gets set into a folder (off by default). */
+  save_wallpapers: boolean;
+  /** Folder used when `save_wallpapers` is on ("" = none chosen yet). */
+  wallpaper_save_folder: string;
 }
 
 /// One saved Unsplash API key as returned by `get_api_keys`.
