@@ -22,6 +22,7 @@ fn main() {
     log::info!("Starting wallpaper app");
 
     tauri::Builder::default()
+        .manage(crate::unsplash::rate_limit_state())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
@@ -196,6 +197,10 @@ fn main() {
             api::settings::update_settings,
             api::settings::get_api_key,
             api::settings::verify_and_save_api_key,
+            api::settings::get_api_keys,
+            api::settings::save_api_keys,
+            api::settings::verify_and_update_api_key,
+            api::settings::get_rate_limit_status,
             api::time_groups::get_time_groups,
             api::time_groups::set_target_groups,
             api::batch::batch_toggle_sources,

@@ -36,11 +36,11 @@ function getTargetId(kind: TargetKind, id: string): string {
   }
 }
 
-function formatHour(hour: number): string {
-  if (hour === 0)  return "12 AM";
-  if (hour === 12) return "12 PM";
-  if (hour < 12)   return `${hour} AM`;
-  return `${hour - 12} PM`;
+function formatHour(hour: number, t: (key: string) => string): string {
+  if (hour === 0)  return `12 ${t("cron.am")}`;
+  if (hour === 12) return `12 ${t("cron.pm")}`;
+  if (hour < 12)   return `${hour} ${t("cron.am")}`;
+  return `${hour - 12} ${t("cron.pm")}`;
 }
 
 // Parse "#rrggbb" into an [r, g, b] tuple. Falls back to a neutral grey.
@@ -224,13 +224,13 @@ function GroupsModal({ target, timeGroups, accent, onClose, onToggleGroup }: Gro
             const isIn = group.target_ids.includes(target.targetId);
             const gm = GROUP_META[group.id];
             const label = groupLabel[group.id] ?? group.label;
-            const timeRange = `${formatHour(group.start_hour)} – ${formatHour(group.end_hour)}`;
+            const timeRange = `${formatHour(group.start_hour, t)} – ${formatHour(group.end_hour, t)}`;
 
             return (
               <button
                 key={group.id}
                 onClick={() => onToggleGroup(group.id, isIn)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-pointer text-start ${
                   isIn
                     ? (gm?.active ?? "border-white/20 bg-white/8 text-white")
                     : "border-white/6 bg-white/3 text-white/40 hover:border-white/12 hover:bg-white/5"
@@ -319,11 +319,11 @@ export default function ActiveTargetsModal({ onClose }: Props) {
         })),
         ...colors.filter(c => c.enabled).map(c => ({
           kind: "color" as const, id: c.color, targetId: getTargetId("color", c.color),
-          label: c.color.charAt(0).toUpperCase() + c.color.slice(1),
+          label: t(`colors.${c.color}`, { defaultValue: c.color.charAt(0).toUpperCase() + c.color.slice(1) }),
         })),
         ...related.filter(r => r.enabled).map(r => ({
           kind: "related" as const, id: r.photo_id, targetId: getTargetId("related", r.photo_id),
-          label: `by ${r.author_name}`, sublabel: `@${r.author_username}`,
+          label: t("related.by", { name: r.author_name }), sublabel: `@${r.author_username}`,
         })),
       ];
 
@@ -515,7 +515,7 @@ export default function ActiveTargetsModal({ onClose }: Props) {
                           : "bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.06] hover:border-white/[0.1]"
                       }`}
                     >
-                      {/* Left column: badge on top, then name + subtext, all left-aligned */}
+                      {/* Start column: badge on top, then name + subtext, all start-aligned */}
                       <div className="flex-1 min-w-0 flex flex-col items-start gap-1.5">
                         <div
                           className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] font-semibold uppercase tracking-wide"
@@ -532,7 +532,7 @@ export default function ActiveTargetsModal({ onClose }: Props) {
                         </div>
                       </div>
 
-                      {/* Right side: clock with quadrant ring + enable toggle */}
+                      {/* End side: clock with quadrant ring + enable toggle */}
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => setGroupTarget(target)}

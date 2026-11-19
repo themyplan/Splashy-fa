@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+/* ── Persian font + RTL ─────────────────────────────────────────────────── */
+/* Vazirmatn is bundled via @fontsource/vazirmatn (imported in main.tsx).
+   It applies only when the UI is right-to-left, so the English/Romanian UI
+   keeps its current look. Tahoma is the fallback if the webfont fails. */
+[dir="rtl"] body {
+  font-family: "Vazirmatn", Tahoma, "Segoe UI", sans-serif;
+}
+
+/* Latin-only mono text (usage counter 25/50, masked keys, cron strings)
+   must stay left-to-right inside an RTL page. */
+[dir="rtl"] .font-mono {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Sidebar glow: fades from the sidebar side toward the content. The sidebar
+   sits on the inline-start side, which flips in RTL. */
+.sidebar-glow {
+  mask-image: linear-gradient(to right, black 40%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 40%, transparent 100%);
+}
+[dir="rtl"] .sidebar-glow {
+  mask-image: linear-gradient(to left, black 40%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, black 40%, transparent 100%);
+}
+
 /* ── Custom scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;

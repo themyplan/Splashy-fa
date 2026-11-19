@@ -10,11 +10,11 @@ const MINUTES_PREVIEW = 24; // 2 rows of 12
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function hourLabel(h: number): string {
-  if (h === 0)  return "12AM";
-  if (h < 12)   return `${h}AM`;
-  if (h === 12) return "12PM";
-  return `${h - 12}PM`;
+function hourLabel(h: number, t: TFunction): string {
+  if (h === 0)  return `12 ${t("cron.am")}`;
+  if (h < 12)   return `${h} ${t("cron.am")}`;
+  if (h === 12) return `12 ${t("cron.pm")}`;
+  return `${h - 12} ${t("cron.pm")}`;
 }
 
 function parseCronField(field: string, max: number): number[] {
@@ -84,22 +84,22 @@ function buildSummary(minutes: number[], hours: number[], weekdays: number[], t:
   let timePhrase = "";
   if (hrs.length === 1 && mins.length === 1) {
     const h = hrs[0], m = mins[0];
-    const ampm = h < 12 ? "am" : "pm";
+    const ampm = h < 12 ? t("cron.am") : t("cron.pm");
     const disp = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    timePhrase = `${disp}:${String(m).padStart(2, "0")}${ampm}`;
+    timePhrase = `${disp}:${String(m).padStart(2, "0")} ${ampm}`;
   } else if (hrs.length && mins.length) {
     const hStr = hrs.map(h => {
-      const ampm = h < 12 ? "am" : "pm";
+      const ampm = h < 12 ? t("cron.am") : t("cron.pm");
       const disp = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      return `${disp}${ampm}`;
+      return `${disp} ${ampm}`;
     }).join(", ");
     const mStr = mins.map(m => ":" + String(m).padStart(2, "0")).join(", ");
     timePhrase = `${hStr} ${t("cron.summaryAt")} ${mStr}`;
   } else if (hrs.length) {
     timePhrase = hrs.map(h => {
-      const ampm = h < 12 ? "am" : "pm";
+      const ampm = h < 12 ? t("cron.am") : t("cron.pm");
       const disp = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      return `${disp}${ampm}`;
+      return `${disp} ${ampm}`;
     }).join(", ");
   } else if (mins.length) {
     timePhrase = t("cron.summaryEveryHourAt") + " " + mins.map(m => ":" + String(m).padStart(2, "0")).join(", ");
@@ -211,7 +211,7 @@ export default function CronScheduler({ value, onChange }: Props) {
         <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))" }}>
           {ALL_HOURS.map(h => (
             <button key={h} onClick={() => onHour(h)} className={cellCls(hours.includes(h))}>
-              {hourLabel(h)}
+              {hourLabel(h, t)}
             </button>
           ))}
         </div>

@@ -1,3 +1,11 @@
+# Splashy-fa
+
+> Persian (فارسی) + multi-key edition of [Halfaxas/Splashy](https://github.com/Halfaxas/Splashy) v1.0.7, built for Windows.
+> - Full Persian UI with RTL layout (Vazirmatn font) — pick «فارسی» in Settings → Language.
+> - Multiple Unsplash API keys in Settings, manual switching only; usage counter shows bare `used/limit` (e.g. `25/50`).
+> - No API key is baked into the installer; enter your key(s) in the app.
+> - No Android-port changes; no relay/proxy in this build.
+
 # Splashy
 
 **https://halfaxas.github.io/Splashy/**

@@ -90,7 +90,7 @@ export default function TopicsView({ refreshKey = 0 }: { refreshKey?: number }) 
             <button
               key={topic.id}
               onClick={() => handleToggle(topic.id, topic.slug, !topic.enabled)}
-              className={`animate-card-in bg-white/5 rounded-2xl overflow-hidden border transition-all hover:scale-[1.01] hover:shadow-lg hover:shadow-black/30 cursor-pointer text-left w-full ${
+              className={`animate-card-in bg-white/5 rounded-2xl overflow-hidden border transition-all hover:scale-[1.01] hover:shadow-lg hover:shadow-black/30 cursor-pointer text-start w-full ${
                 topic.enabled ? "border-white/20" : "border-white/8 hover:border-white/16"
               }`}
               style={{ animationDelay: `${idx * 25}ms` }}
@@ -103,10 +103,10 @@ export default function TopicsView({ refreshKey = 0 }: { refreshKey?: number }) 
                 )}
               </div>
               <div className="p-3 flex items-center justify-between">
-                <div className="min-w-0 mr-3">
+                <div className="min-w-0 me-3">
                   <button
                     onClick={(e) => { e.stopPropagation(); openUrl(`https://unsplash.com/t/${topic.slug}`); }}
-                    className="text-sm font-medium text-white hover:text-white/70 transition-colors cursor-pointer truncate block text-left"
+                    className="text-sm font-medium text-white hover:text-white/70 transition-colors cursor-pointer truncate block text-start"
                   >
                     {topic.title}
                   </button>

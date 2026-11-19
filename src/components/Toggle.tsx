@@ -13,8 +13,8 @@ export default function Toggle({ enabled, onChange }: ToggleProps) {
       }`}
     >
       <span
-        className={`absolute top-0.5 w-4 h-4 rounded-full shadow transition-[left,background-color] duration-200 ease-in-out ${
-          enabled ? "left-[calc(100%-1.125rem)] bg-slate-900" : "left-0.5 bg-white"
+        className={`absolute top-0.5 w-4 h-4 rounded-full shadow transition-[inset-inline-start,background-color] duration-200 ease-in-out ${
+          enabled ? "start-[calc(100%-1.125rem)] bg-slate-900" : "start-0.5 bg-white"
         }`}
       />
     </button>

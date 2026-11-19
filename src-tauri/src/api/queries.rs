@@ -52,7 +52,7 @@ pub async fn add_query(query: String) -> Result<QuerySummary, String> {
     }
 
     // Probe: make sure this query actually returns photos
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
     match client.get_random_photo(&[("query", query.as_str())]).await {
         Ok(_) => {}
         Err(e) if e.contains("404") => {

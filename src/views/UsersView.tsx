@@ -178,7 +178,7 @@ export default function UsersView({ refreshKey = 0 }: { refreshKey?: number }) {
                 <button
                   onClick={() => setConfirmDelete(user)}
                   className="p-1 rounded-md text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-                  title="Unfollow photographer"
+                  title={t("users.unfollowTooltip")}
                 >
                   <IconTrash className="w-3.5 h-3.5" />
                 </button>

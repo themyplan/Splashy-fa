@@ -61,7 +61,7 @@ pub async fn change_wallpaper() -> Result<String, String> {
         log::info!("[wallpaper] Used prefetched wallpaper");
     } else {
         // No prefetched next — fetch fresh
-        let client = crate::unsplash::get_client()?;
+        let client = crate::unsplash::client_from_active_key()?;
         log::debug!(
             "[wallpaper] Fresh fetch: orientation={}, {} getter_target(s)",
             settings.orientation, settings.getter_targets.len()
@@ -97,7 +97,7 @@ pub async fn change_wallpaper() -> Result<String, String> {
 /// Exposed publicly so callers can spawn it and emit an event on completion.
 pub async fn prefetch_next_wallpaper() -> Result<(), String> {
     let settings    = load_settings()?;
-    let client      = crate::unsplash::get_client()?;
+    let client      = crate::unsplash::client_from_active_key()?;
     let current_dir = paths::current_dir()?;
 
     let next_time = compute_next_fire_time(&settings.wallpaper_cron);

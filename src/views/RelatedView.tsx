@@ -166,18 +166,18 @@ export default function RelatedView({ refreshKey = 0 }: { refreshKey?: number })
               <div className="flex-1 min-w-0 py-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); openUrl(s.unsplash_url); }}
-                  className="text-sm font-medium text-white hover:text-white/70 transition-colors cursor-pointer truncate block text-left"
+                  className="text-sm font-medium text-white hover:text-white/70 transition-colors cursor-pointer truncate block text-start"
                 >
                   {t("related.by", { name: s.author_name })}
                 </button>
                 <span className="text-xs text-white/50 pointer-events-none">@{s.author_username}</span>
               </div>
 
-              <div className="flex items-center gap-2 pr-4 shrink-0">
+              <div className="flex items-center gap-2 pe-4 shrink-0">
                 <button
                   onClick={(e) => { e.stopPropagation(); setConfirmDelete(s); }}
                   className="p-1 rounded-md text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-                  title="Delete source"
+                  title={t("related.deleteTooltip")}
                 >
                   <IconTrash className="w-3.5 h-3.5" />
                 </button>

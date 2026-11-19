@@ -52,7 +52,7 @@ function SortDropdown({ value, options, onChange }: {
       </button>
 
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 min-w-full rounded-xl overflow-hidden border border-white/[0.10] shadow-lg shadow-black/20">
+        <div className="absolute top-full mt-1 start-0 z-50 min-w-full rounded-xl overflow-hidden border border-white/[0.10] shadow-lg shadow-black/20">
           {/* Emulated liquid glass */}
           <div className="absolute inset-0 z-0 pointer-events-none backdrop-blur-lg bg-white/[0.04]" />
           <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-br from-white/[0.06] via-transparent to-white/[0.02]" />
@@ -63,7 +63,7 @@ function SortDropdown({ value, options, onChange }: {
               <button
                 key={opt.value}
                 onClick={() => { onChange(opt.value); setOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer ${
+                className={`w-full text-start px-3 py-2 text-xs transition-colors cursor-pointer ${
                   opt.value === value
                     ? "bg-white/12 text-white"
                     : "text-white/70 hover:bg-white/8 hover:text-white"
@@ -126,7 +126,7 @@ export default function FilterBar({
         <SortDropdown value={sortBy} options={sortOptions} onChange={onSortBy} />
         <button
           onClick={() => onSortDir(sortDir === "asc" ? "desc" : "asc")}
-          title={sortDir === "asc" ? "Ascending" : "Descending"}
+          title={sortDir === "asc" ? t("filterBar.ascending") : t("filterBar.descending")}
           className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/10 bg-white/6 text-white/70 hover:text-white hover:border-white/20 transition-colors cursor-pointer text-sm"
         >
           {sortDir === "asc" ? "↑" : "↓"}

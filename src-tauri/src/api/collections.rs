@@ -103,7 +103,7 @@ pub async fn import_collection(id: String) -> Result<CollectionSummary, String> 
     log::info!("[collections] import_collection: raw input={:?}", id);
     let id = extract_collection_id(&id)?;
     log::info!("[collections] import_collection: resolved id={}", id);
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
 
     // Probe: verify photos can actually be fetched from this collection
     match client.get_random_photo(&[("collections", id.as_str())]).await {

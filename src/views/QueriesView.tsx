@@ -159,7 +159,7 @@ export default function QueriesView({ refreshKey = 0 }: { refreshKey?: number })
               <IconSearch className="w-4 h-4 text-white/50 shrink-0 pointer-events-none" />
               <button
                 onClick={(e) => { e.stopPropagation(); openUrl(`https://unsplash.com/s/photos/${encodeURIComponent(q.value)}`); }}
-                className="min-w-0 shrink text-sm text-white font-medium truncate text-left hover:text-white/70 transition-colors cursor-pointer"
+                className="min-w-0 shrink text-sm text-white font-medium truncate text-start hover:text-white/70 transition-colors cursor-pointer"
               >
                 {q.value}
               </button>
@@ -167,7 +167,7 @@ export default function QueriesView({ refreshKey = 0 }: { refreshKey?: number })
               <button
                 onClick={(e) => { e.stopPropagation(); setConfirmDelete(q); }}
                 className="p-1 rounded-md text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-                title="Delete query"
+                title={t("queries.deleteTooltip")}
               >
                 <IconTrash className="w-3.5 h-3.5" />
               </button>

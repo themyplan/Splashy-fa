@@ -50,7 +50,7 @@ function AdjacentCard({
       onClick={info ? () => openUrl(info.unsplash_url) : undefined}
       title={info ? `${label} — Photo by ${info.author_name}` : label}
       disabled={!info}
-      className="relative flex flex-col overflow-hidden rounded-xl transition-all cursor-pointer text-left shrink-0 disabled:cursor-default"
+      className="relative flex flex-col overflow-hidden rounded-xl transition-all cursor-pointer text-start shrink-0 disabled:cursor-default"
       style={{ width: 96 }}
     >
       <div className="absolute inset-0 -z-10">
@@ -179,7 +179,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
   };
 
   const handleSave = async () => {
-    const folder = await open({ directory: true, multiple: false, title: "Choose folder to save wallpaper" });
+    const folder = await open({ directory: true, multiple: false, title: t("home.chooseFolderTitle") });
     if (!folder) return;
     setSaving(true);
     setSaveStatus(null);
@@ -204,7 +204,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
 
       <button
         onClick={() => setShowTargetsModal(true)}
-        className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-white/80 hover:text-white transition-all cursor-pointer overflow-hidden"
+        className="absolute top-4 end-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-white/80 hover:text-white transition-all cursor-pointer overflow-hidden"
       >
         <div className="absolute inset-0 -z-10">
           <GlassPanel cornerRadius={12} className="w-full h-full" />
@@ -232,7 +232,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
             {renderStatusWithLinks(status)}
             <div
               key={statusAnimKey}
-              className={`absolute bottom-0 left-0 h-px w-full origin-left ${isError ? "bg-red-400/60" : "bg-emerald-400/60"}`}
+              className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${isError ? "bg-red-400/60" : "bg-emerald-400/60"}`}
               style={{ animation: `status-bar-shrink ${STATUS_DURATION_MS}ms linear forwards` }}
             />
           </div>
@@ -252,7 +252,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
                 relatedStatus.startsWith("Error") ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
               }`}>
                 {relatedStatus}
-                <span key={relatedStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left ${relatedStatus.startsWith("Error") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
+                <span key={relatedStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${relatedStatus.startsWith("Error") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
                   style={{ animation: `status-bar-shrink ${SAVE_STATUS_DURATION_MS}ms linear forwards` }} />
               </span>
             )}
@@ -261,7 +261,7 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
                 saveStatus.startsWith("Error") ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
               }`}>
                 {saveStatus}
-                <span key={saveStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left ${saveStatus.startsWith("Error") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
+                <span key={saveStatusAnimKey} className={`absolute bottom-0 left-0 h-px w-full origin-left rtl:origin-right ${saveStatus.startsWith("Error") ? "bg-red-400/60" : "bg-emerald-400/60"}`}
                   style={{ animation: `status-bar-shrink ${SAVE_STATUS_DURATION_MS}ms linear forwards` }} />
               </span>
             )}

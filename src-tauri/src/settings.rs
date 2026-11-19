@@ -1,5 +1,6 @@
 use crate::fs::{dirs, files, paths};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetterTarget {
@@ -33,6 +34,27 @@ fn default_time_groups() -> Vec<TimeGroup> {
     ]
 }
 
+/// One saved Unsplash API key. `id` is an opaque stable identifier
+/// (never the key itself); `label` is the user-visible name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKeyEntry {
+    pub id: String,
+    pub label: String,
+    pub key: String,
+}
+
+/// Generate a unique id for a new API key entry.
+/// No new dependencies: wall-clock nanos + a process-local counter.
+pub fn new_api_key_id() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("key-{}-{}", nanos, n)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// 5-field cron expression: "min hour dom month dow"
@@ -49,8 +71,18 @@ pub struct Settings {
     pub getter_targets: Vec<GetterTarget>,
     #[serde(default = "default_time_groups")]
     pub time_groups: Vec<TimeGroup>,
+    /// Legacy single-key storage. Kept for migration only: load_settings()
+    /// moves it into `api_keys` (label "کلید ۱") and clears this field in
+    /// memory, so the next save drops it from settings.json. Never write a
+    /// new key here; use `api_keys` + `active_api_key_id`.
     #[serde(default)]
     pub api_key: Option<String>,
+    /// All saved Unsplash API keys (manual switching only — no auto-rotation).
+    #[serde(default)]
+    pub api_keys: Vec<ApiKeyEntry>,
+    /// Id of the entry in `api_keys` used for all Unsplash calls.
+    #[serde(default)]
+    pub active_api_key_id: Option<String>,
 }
 
 fn default_wallpaper_cron() -> String { "0 * * * *".to_string() }
@@ -68,19 +100,70 @@ impl Default for Settings {
             getter_targets: vec![],
             time_groups: default_time_groups(),
             api_key: option_env!("UNSPLASH_ACCESS_KEY").map(|s| s.to_string()),
+            api_keys: vec![],
+            active_api_key_id: None,
         }
     }
 }
 
+/// The API key entry currently in use: the entry matching
+/// `active_api_key_id`, falling back to the first entry when no active id
+/// is set (or it no longer exists). Returns None when no key is saved.
+pub fn active_api_key(settings: &Settings) -> Option<&ApiKeyEntry> {
+    if let Some(id) = &settings.active_api_key_id {
+        if let Some(entry) = settings.api_keys.iter().find(|e| &e.id == id) {
+            return Some(entry);
+        }
+    }
+    settings.api_keys.first()
+}
+
+/// Id of the active key entry, resolved the same way as `active_api_key`.
+pub fn active_api_key_id(settings: &Settings) -> Option<String> {
+    active_api_key(settings).map(|e| e.id.clone())
+}
+
 pub fn load_settings() -> Result<Settings, String> {
     let path = paths::settings_file()?;
-    if !path.exists() {
-        return Ok(Settings::default());
+    let mut settings: Settings = if !path.exists() {
+        Settings::default()
+    } else {
+        let bytes = std::fs::read(&path)
+            .map_err(|e| format!("Failed to read settings.json: {}", e))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Failed to parse settings.json: {}", e))?
+    };
+
+    // One-time migration: a legacy single key moves into `api_keys` as
+    // "کلید ۱" and becomes active. The old `api_key` field is cleared in
+    // memory here, so it disappears from settings.json on the next save.
+    // Nothing is saved by load itself; an existing key is never lost.
+    if settings.api_keys.is_empty() {
+        if let Some(old_key) = settings.api_key.take() {
+            let id = new_api_key_id();
+            settings.api_keys.push(ApiKeyEntry {
+                id: id.clone(),
+                label: "کلید ۱".to_string(),
+                key: old_key,
+            });
+            settings.active_api_key_id = Some(id);
+        }
     }
-    let bytes = std::fs::read(&path)
-        .map_err(|e| format!("Failed to read settings.json: {}", e))?;
-    let mut settings: Settings = serde_json::from_slice(&bytes)
-        .map_err(|e| format!("Failed to parse settings.json: {}", e))?;
+
+    // Sanitize: the active id must point at a real entry; otherwise fall
+    // back to the first entry (or None when the list is empty).
+    if !settings.api_keys.is_empty() {
+        let active_ok = settings
+            .active_api_key_id
+            .as_ref()
+            .map(|id| settings.api_keys.iter().any(|e| &e.id == id))
+            .unwrap_or(false);
+        if !active_ok {
+            settings.active_api_key_id = settings.api_keys.first().map(|e| e.id.clone());
+        }
+    } else {
+        settings.active_api_key_id = None;
+    }
 
     // One-time migration: if all groups are empty but targets exist, populate all groups.
     if settings.time_groups.iter().all(|g| g.target_ids.is_empty())

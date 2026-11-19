@@ -30,7 +30,8 @@
     "savedAs": "Saved as {{filename}}",
     "addToRelated": "Add to Related",
     "adding": "Adding…",
-    "addedToRelated": "Added to Related sources"
+    "addedToRelated": "Added to Related sources",
+    "chooseFolderTitle": "Choose folder to save wallpaper"
   },
   "collections": {
     "title": "Collections",
@@ -45,7 +46,9 @@
     "deleteBody": "\"{{title}}\" will be removed from your sources and its files deleted. This cannot be undone.",
     "sortDateAdded": "Date added",
     "sortName": "Name",
-    "sortPhotos": "Photos"
+    "sortPhotos": "Photos",
+    "openOnUnsplash": "Open collection on Unsplash",
+    "deleteTooltip": "Delete collection"
   },
   "users": {
     "title": "Photographers",
@@ -61,7 +64,8 @@
     "unfollow": "Unfollow",
     "sortDateAdded": "Date added",
     "sortUsername": "Username",
-    "sortPhotos": "Photos"
+    "sortPhotos": "Photos",
+    "unfollowTooltip": "Unfollow photographer"
   },
   "topics": {
     "title": "Topics",
@@ -82,11 +86,22 @@
     "deleteTitle": "Delete query?",
     "deleteBody": "\"{{value}}\" will be removed from your sources.",
     "sortDateAdded": "Date added",
-    "sortName": "Name"
+    "sortName": "Name",
+    "deleteTooltip": "Delete query"
   },
   "colors": {
     "title": "Colors",
-    "desc": "Enable colors to source wallpapers with that dominant tone."
+    "desc": "Enable colors to source wallpapers with that dominant tone.",
+    "black": "Black",
+    "white": "White",
+    "yellow": "Yellow",
+    "orange": "Orange",
+    "red": "Red",
+    "purple": "Purple",
+    "magenta": "Magenta",
+    "green": "Green",
+    "teal": "Teal",
+    "blue": "Blue"
   },
   "related": {
     "title": "Similar Photos",
@@ -99,7 +114,8 @@
     "deleteBody": "Photo by {{name}} will be removed from your sources.",
     "remove": "Remove",
     "sortDateAdded": "Date added",
-    "by": "by {{name}}"
+    "by": "by {{name}}",
+    "deleteTooltip": "Delete source"
   },
   "settings": {
     "title": "Settings",
@@ -146,7 +162,25 @@
     "sectionApiKey": "Unsplash API Key",
     "apiKeyDesc": "Your Unsplash access key. Get one free at unsplash.com/developers.",
     "apiKeyPlaceholder": "Paste your access key here",
-    "apiKeySave": "Verify & Save"
+    "apiKeySave": "Verify & Save",
+    "apiKeys": {
+      "title": "API Keys",
+      "addKey": "Add key",
+      "deleteKey": "Delete",
+      "deleteConfirm": "Delete \"{{label}}\"? This cannot be undone.",
+      "verifySave": "Verify & Save",
+      "verified": "Verified",
+      "activeKey": "Active key",
+      "keyLabelPlaceholder": "Key name, e.g. Key 1",
+      "keyPlaceholder": "Paste your access key here",
+      "lastFour": "Last 4 characters",
+      "cannotDeleteLast": "You cannot delete the last key.",
+      "usageTitle": "API usage"
+    },
+    "scheduleHour": "Hour",
+    "scheduleMinute": "Minute",
+    "sectionSupport": "Support",
+    "buyMeACoffee": "Buy me a coffee"
   },
   "apiSetup": {
     "title": "Connect to Unsplash",
@@ -179,7 +213,9 @@
     "all": "All",
     "active": "Active",
     "inactive": "Inactive",
-    "sortBy": "Sort by"
+    "sortBy": "Sort by",
+    "ascending": "Ascending",
+    "descending": "Descending"
   },
   "cron": {
     "weekdays": "Weekdays",
@@ -211,7 +247,9 @@
     "summaryEveryHourAt": "every hour at",
     "summaryOn": "On {{days}}",
     "summaryEveryDayAt": "Every day at {{time}}",
-    "summaryOnDaysAt": "On {{days}}, at {{time}}"
+    "summaryOnDaysAt": "On {{days}}, at {{time}}",
+    "am": "AM",
+    "pm": "PM"
   },
   "updater": {
     "title": "Update Available",
@@ -222,5 +260,10 @@
     "installing": "Installing…",
     "readyToRestart": "Installed — restarting…",
     "error": "Couldn't install the update. Try again later."
+  },
+  "titleBar": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "close": "Close"
   }
 }

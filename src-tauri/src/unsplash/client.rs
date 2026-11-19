@@ -6,10 +6,20 @@ use super::models::{
 pub struct UnsplashClient {
     pub(crate) inner: reqwest::Client,
     access_key: String,
+    /// Id of the `ApiKeyEntry` this client authenticates with, if known.
+    /// Used only to tag the recorded rate-limit status; None when the
+    /// client was built without an entry id.
+    key_id: Option<String>,
 }
 
 impl UnsplashClient {
     pub fn new(access_key: impl Into<String>) -> Self {
+        Self::new_with_id(access_key, None)
+    }
+
+    /// Build a client bound to a saved key entry, so the rate-limit headers
+    /// of its responses can be attributed to that entry.
+    pub fn new_with_id(access_key: impl Into<String>, key_id: Option<String>) -> Self {
         let inner = reqwest::Client::builder()
             .no_proxy()
             .build()
@@ -17,11 +27,21 @@ impl UnsplashClient {
         Self {
             inner,
             access_key: access_key.into(),
+            key_id,
         }
     }
 
     fn auth(&self) -> String {
         format!("Client-ID {}", self.access_key)
+    }
+
+    /// Capture X-Ratelimit-Limit / X-Ratelimit-Remaining from one
+    /// api.unsplash.com response into the shared rate-limit state.
+    /// Call immediately after receiving the response, before the body is
+    /// consumed and before any status check, so error responses (403/429)
+    /// are recorded too.
+    fn record_rate_limit(&self, headers: &reqwest::header::HeaderMap) {
+        crate::unsplash::record_rate_limit_headers(headers, self.key_id.clone());
     }
 
     fn check_status(status: reqwest::StatusCode, body: &str) -> Result<(), String> {
@@ -58,6 +78,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         log::debug!("[unsplash] /photos/random -> {}", status);
 
@@ -81,12 +102,17 @@ impl UnsplashClient {
     /// Fire-and-forget download registration per Unsplash guidelines.
     pub async fn register_download(&self, url: &str) {
         log::debug!("[unsplash] register_download: GET {}", url);
-        let _ = self
+        if let Ok(resp) = self
             .inner
             .get(url)
             .header("Authorization", self.auth())
             .send()
-            .await;
+            .await
+        {
+            // The download-location endpoint is api.unsplash.com, so its
+            // response carries rate-limit headers like any other API call.
+            self.record_rate_limit(resp.headers());
+        }
     }
 
     /// GET /collections/:id with optional ETag for conditional fetch.
@@ -105,6 +131,7 @@ impl UnsplashClient {
         }
         let resp = req.send().await.map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 304 {
             log::debug!("[unsplash] GET {} -> 304 Not Modified", url);
@@ -141,6 +168,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         log::debug!("[unsplash] GET {} -> {}", url, status);
         if status.as_u16() == 404 {
@@ -165,6 +193,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         log::debug!("[unsplash] GET {} -> {}", url, status);
         if status.as_u16() == 404 {
@@ -189,6 +218,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         Self::check_status(status, &body)?;
@@ -218,6 +248,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         Self::check_status(status, &body)?;
@@ -238,6 +269,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 404 {
             return Err(format!("Photo not found: {}", photo_id));
@@ -270,6 +302,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         Self::check_status(status, &body)?;
@@ -290,6 +323,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
@@ -335,6 +369,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         Self::check_status(status, &body)?;
@@ -359,6 +394,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         Self::check_status(status, &body)?;
@@ -397,6 +433,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 404 {
             return Err(format!("ERR_COLLECTION_NOT_FOUND: {}", collection_id));
@@ -437,6 +474,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 404 {
             return Err(format!("ERR_USER_NOT_FOUND: {}", username));
@@ -466,6 +504,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 404 {
             return Err(format!("ERR_USER_NOT_FOUND: {}", username));
@@ -506,6 +545,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 404 {
             return Err(format!("ERR_USER_NOT_FOUND: {}", username));
@@ -538,6 +578,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         Self::check_status(status, &body)?;
@@ -575,6 +616,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 404 {
             return Err(format!("Topic not found: {}", id_or_slug));
@@ -604,6 +646,7 @@ impl UnsplashClient {
             .await
             .map_err(|e| format!("ERR_NETWORK: {}", e))?;
 
+        self.record_rate_limit(resp.headers());
         let status = resp.status();
         if status.as_u16() == 400 {
             return Err(format!("ERR_BAD_PAGE: 400 for page {}", page));
@@ -617,6 +660,8 @@ impl UnsplashClient {
 
     /// Download raw image bytes from any URL (no auth header needed).
     /// Returns (bytes, content_type).
+    /// NOTE: image downloads come from images.unsplash.com and do NOT count
+    /// against the API rate limit, so no rate-limit headers are recorded here.
     pub async fn download_image(&self, url: &str) -> Result<(Vec<u8>, String), String> {
         let resp = self
             .inner

@@ -32,7 +32,7 @@ fn discard_topic(topic_dir: &std::path::Path, topic_id: &str, settings: &mut cra
 /// Returns the updated list of all topics with their enabled state.
 pub async fn sync_topics() -> Result<Vec<TopicWithEnabled>, String> {
     log::info!("[topics] sync_topics: fetching from Unsplash");
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
 
     // Fetch all topics from API (per_page=30 covers all Unsplash topics)
     let api_topics = client.list_topics_paged(1, 30, "featured").await?;

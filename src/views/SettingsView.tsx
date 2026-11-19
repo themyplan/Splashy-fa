@@ -4,7 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
-import { AppSettings } from "../types";
+import { ApiKeyEntry, ApiKeySaveEntry, AppSettings, RateLimitStatus } from "../types";
 import { LANGUAGES } from "../i18n";
 import CronScheduler from "../components/CronScheduler";
 import Toggle from "../components/Toggle";
@@ -32,12 +32,7 @@ function isOnceDailyCron(expr: string): boolean {
   return /^\d+ \d+ \* \* \*$/.test(expr);
 }
 
-function hourLabel12(h: number): string {
-  if (h === 0) return "12am";
-  if (h < 12) return `${h}am`;
-  if (h === 12) return "12pm";
-  return `${h - 12}pm`;
-}
+
 
 const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i);
 const ALL_MINUTES = Array.from({ length: 60 }, (_, i) => i);
@@ -50,8 +45,39 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
+// One row of the API-key list. `keyInput` holds text the user typed for
+// this row only (a new key, or a replacement for a saved row); saved rows
+// display `maskedKey` and never hold the full key.
+interface ApiKeyRow {
+  id: string;
+  label: string;
+  maskedKey: string;
+  isActive: boolean;
+  keyInput: string;
+  isNew: boolean;
+  verifying: boolean;
+  error: string | null;
+}
+
+function toRows(keys: ApiKeyEntry[]): ApiKeyRow[] {
+  return keys.map((k) => ({
+    id: k.id,
+    label: k.label,
+    maskedKey: k.masked_key,
+    isActive: k.is_active,
+    keyInput: "",
+    isNew: false,
+    verifying: false,
+    error: null,
+  }));
+}
+
 export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () => void }) {
   const { t, i18n } = useTranslation();
+  const hourLabel12 = (h: number): string => {
+    const disp = h === 0 ? 12 : h <= 12 ? h : h - 12;
+    return `${disp} ${h < 12 ? t("cron.am") : t("cron.pm")}`;
+  };
   const [quality, setQuality] = useState("regular");
   const [orientation, setOrientation] = useState("landscape");
   const [cron, setCron] = useState("0 * * * *");
@@ -61,10 +87,9 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const [saved, setSaved] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState("");
-  const [apiKeyLoaded, setApiKeyLoaded] = useState("");
-  const [apiKeyVerifying, setApiKeyVerifying] = useState(false);
-  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKeyRow[]>([]);
+  const [rateLimit, setRateLimit] = useState<RateLimitStatus | null>(null);
+  const [apiKeysError, setApiKeysError] = useState<string | null>(null);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [version, setVersion] = useState("");
 
@@ -93,36 +118,172 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   ];
 
   useEffect(() => {
-    Promise.all([invoke<AppSettings>("get_settings"), isEnabled()])
-      .then(([s, autostart]) => {
+    Promise.all([
+      invoke<AppSettings>("get_settings"),
+      isEnabled(),
+      invoke<ApiKeyEntry[]>("get_api_keys"),
+      invoke<RateLimitStatus | null>("get_rate_limit_status"),
+    ])
+      .then(([s, autostart, keys, status]) => {
         setQuality(s.quality);
         setOrientation(s.orientation);
         setCron(s.wallpaper_cron);
         setScheduleTab(BASIC_CRONS.has(s.wallpaper_cron) || isOnceDailyCron(s.wallpaper_cron) ? "basic" : "advanced");
         setStartOnLogin(autostart);
-        const k = s.api_key ?? "";
-        setApiKey(k);
-        setApiKeyLoaded(k);
+        setApiKeys(toRows(keys));
+        setRateLimit(status);
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
     getVersion().then(setVersion).catch(() => {});
   }, []);
 
-  const handleSaveApiKey = async () => {
-    setApiKeyVerifying(true);
-    setApiKeyError(null);
+  const refreshRateLimit = useCallback(async () => {
     try {
-      await invoke("verify_and_save_api_key", { key: apiKey });
-      setApiKeyLoaded(apiKey);
-      setApiKeySaved(true);
-      setTimeout(() => setApiKeySaved(false), 1500);
+      setRateLimit(await invoke<RateLimitStatus | null>("get_rate_limit_status"));
+    } catch {
+      /* counter stays as-is */
+    }
+  }, []);
+
+  const reloadApiKeys = useCallback(async () => {
+    const keys = await invoke<ApiKeyEntry[]>("get_api_keys");
+    setApiKeys(toRows(keys));
+    await refreshRateLimit();
+    return keys;
+  }, [refreshRateLimit]);
+
+  const flashSaved = () => {
+    setApiKeySaved(true);
+    setTimeout(() => setApiKeySaved(false), 1500);
+  };
+
+  const setRow = (id: string, patch: Partial<ApiKeyRow>) =>
+    setApiKeys((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  // Persist labels + active selection for SAVED rows only (unsaved new
+  // rows are not sent — they only enter via Verify & Save). The key is
+  // always sent empty here, which means "keep the stored key": a typed
+  // replacement key is only ever sent through the verify commands.
+  const persistSavedKeys = async (rows: ApiKeyRow[], activeId: string | null) => {
+    const keys: ApiKeySaveEntry[] = rows
+      .filter((r) => !r.isNew)
+      .map((r) => ({ id: r.id, label: r.label, key: "" }));
+    await invoke("save_api_keys", { keys, activeId });
+  };
+
+  const handleVerifyRow = async (row: ApiKeyRow) => {
+    setRow(row.id, { verifying: true, error: null });
+    setApiKeysError(null);
+    try {
+      if (row.isNew) {
+        if (!row.keyInput.trim()) return;
+        const beforeIds = new Set(apiKeys.filter((r) => !r.isNew).map((r) => r.id));
+        await invoke("verify_and_save_api_key", { key: row.keyInput.trim() });
+        const keys = await reloadApiKeys();
+        // Keep a label the user typed for the new row: verify creates it
+        // as "کلید N+1", so re-apply the typed label right after.
+        const typedLabel = row.label.trim();
+        if (typedLabel) {
+          const added = keys.find((k) => !beforeIds.has(k.id));
+          if (added) {
+            await invoke("save_api_keys", {
+              keys: keys.map((k) => ({
+                id: k.id,
+                label: k.id === added.id ? typedLabel : k.label,
+                key: "",
+              })),
+              activeId: keys.find((k) => k.is_active)?.id ?? added.id,
+            });
+            await reloadApiKeys();
+          }
+        }
+      } else if (row.keyInput.trim()) {
+        await invoke("verify_and_update_api_key", { id: row.id, key: row.keyInput.trim() });
+        await reloadApiKeys();
+      } else {
+        // No new key typed: just persist the (possibly edited) label.
+        await persistSavedKeys(apiKeys, apiKeys.find((r) => r.isActive)?.id ?? null);
+        await reloadApiKeys();
+      }
+      flashSaved();
       onApiKeyChange();
     } catch (e) {
-      setApiKeyError(String(e));
+      setRow(row.id, { error: String(e) });
     } finally {
-      setApiKeyVerifying(false);
+      setRow(row.id, { verifying: false });
     }
+  };
+
+  const handleSelectActive = async (row: ApiKeyRow) => {
+    if (row.isActive || row.isNew) return;
+    setApiKeysError(null);
+    try {
+      await persistSavedKeys(apiKeys, row.id);
+      await reloadApiKeys();
+      onApiKeyChange();
+    } catch (e) {
+      setApiKeysError(String(e));
+    }
+  };
+
+  const handleDeleteRow = async (row: ApiKeyRow) => {
+    // Unsaved new rows only exist locally.
+    if (row.isNew) {
+      setApiKeys((rows) => rows.filter((r) => r.id !== row.id));
+      return;
+    }
+    if (apiKeys.filter((r) => !r.isNew).length <= 1) {
+      setApiKeysError(t("settings.apiKeys.cannotDeleteLast"));
+      return;
+    }
+    if (!window.confirm(t("settings.apiKeys.deleteConfirm", { label: row.label || row.maskedKey }))) return;
+    setApiKeysError(null);
+    try {
+      const remaining = apiKeys.filter((r) => r.id !== row.id && !r.isNew);
+      const activeId = row.isActive
+        ? remaining[0]?.id ?? null
+        : apiKeys.find((r) => r.isActive)?.id ?? null;
+      await invoke("save_api_keys", {
+        keys: remaining.map((r) => ({ id: r.id, label: r.label, key: "" })),
+        activeId,
+      });
+      await reloadApiKeys();
+      onApiKeyChange();
+    } catch (e) {
+      setApiKeysError(String(e));
+    }
+  };
+
+  const handleAddKey = () => {
+    setApiKeysError(null);
+    setApiKeys((rows) => [
+      ...rows,
+      {
+        id: `new-${Date.now()}`,
+        label: "",
+        maskedKey: "",
+        isActive: false,
+        keyInput: "",
+        isNew: true,
+        verifying: false,
+        error: null,
+      },
+    ]);
+  };
+
+  // Usage counter for one row, shown under the ACTIVE row only as a bare
+  // `used/limit` number. The limit comes from the response header once a
+  // call has been made with this key; before the first call it is the
+  // Demo-tier default (50) with 0 used.
+  const usage = (row: ApiKeyRow): { used: number; limit: number } => {
+    if (rateLimit && rateLimit.key_id === row.id) {
+      return {
+        used: Math.max(0, rateLimit.limit - rateLimit.remaining),
+        limit: rateLimit.limit,
+      };
+    }
+    return { used: 0, limit: 50 };
   };
 
   const handleStartOnLoginToggle = async (checked: boolean) => {
@@ -266,7 +427,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                 <button
                   key={opt.cron}
                   onClick={() => handleCronChange(opt.cron)}
-                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl border text-left cursor-pointer transition-colors ${
+                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl border text-start cursor-pointer transition-colors ${
                     cron === opt.cron
                       ? "border-white/25 bg-white/8"
                       : "border-white/8 bg-white/4 hover:border-white/16"
@@ -275,7 +436,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                   <span className={`text-sm font-medium ${cron === opt.cron ? "text-white" : "text-white/70"}`}>
                     {opt.label}
                   </span>
-                  {opt.desc && <span className="text-xs text-white/50 ml-2 shrink-0">{opt.desc}</span>}
+                  {opt.desc && <span className="text-xs text-white/50 ms-2 shrink-0">{opt.desc}</span>}
                 </button>
               ))}
 
@@ -283,7 +444,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
               <div>
                 <button
                   onClick={handleOnceDailyClick}
-                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl border text-left cursor-pointer transition-colors ${
+                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl border text-start cursor-pointer transition-colors ${
                     isOnceDailySelected
                       ? "border-white/25 bg-white/8 rounded-b-none border-b-0"
                       : "border-white/8 bg-white/4 hover:border-white/16"
@@ -293,7 +454,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                     {t("settings.scheduleOnceADay")}
                   </span>
                   {isOnceDailySelected && (
-                    <span className="text-xs text-white/60 ml-2 shrink-0 font-mono">
+                    <span className="text-xs text-white/60 ms-2 shrink-0 font-mono">
                       {hourLabel12(dailyHour)}:{String(dailyMinute).padStart(2, "0")}
                     </span>
                   )}
@@ -303,7 +464,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
                   <div className="border border-white/25 border-t-0 rounded-xl rounded-t-none bg-white/4 px-3 pt-3 pb-3 flex flex-col gap-3">
                     {/* Hours grid: AM top row, PM bottom row */}
                     <div>
-                      <p className="text-[10px] text-white/50 uppercase tracking-widest mb-1.5">Hour</p>
+                      <p className="text-[10px] text-white/50 uppercase tracking-widest mb-1.5">{t("settings.scheduleHour")}</p>
                       <div className="grid grid-cols-12 gap-1">
                         {ALL_HOURS.map(h => (
                           <button
@@ -323,7 +484,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
 
                     {/* Minutes */}
                     <div>
-                      <p className="text-[10px] text-white/50 uppercase tracking-widest mb-1.5">Minute</p>
+                      <p className="text-[10px] text-white/50 uppercase tracking-widest mb-1.5">{t("settings.scheduleMinute")}</p>
                       <div className="grid grid-cols-12 gap-1">
                         {ALL_MINUTES.map(m => (
                           <button
@@ -391,30 +552,95 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
           </div>
         </section>
 
-        {/* ── API Key ───────────────────────────────────────────────────── */}
+        {/* ── API Keys ──────────────────────────────────────────────────── */}
         <section>
           <SectionHeader>{t("settings.sectionApiKey")}</SectionHeader>
           <div className="flex flex-col gap-2 bg-white/4 rounded-2xl border border-white/8 p-4">
             <p className="text-xs text-white/60">{t("settings.apiKeyDesc")}</p>
-            <input
-              type="text"
-              value={apiKey}
-              onChange={(e) => { setApiKey(e.target.value); setApiKeyError(null); }}
-              onKeyDown={(e) => e.key === "Enter" && apiKey.trim() !== apiKeyLoaded && handleSaveApiKey()}
-              placeholder={t("settings.apiKeyPlaceholder")}
-              className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 transition-colors font-mono"
-            />
-            {apiKeyError && (
-              <p className="text-xs text-red-400">{apiKeyError}</p>
+            <p className="text-sm font-medium text-white/70">{t("settings.apiKeys.title")}</p>
+            {apiKeysError && (
+              <p className="text-xs text-red-400">{apiKeysError}</p>
             )}
+            {apiKeys.map((row) => {
+              const u = usage(row);
+              return (
+                <div key={row.id} className="flex flex-col gap-2 rounded-xl border border-white/8 bg-white/4 p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="active-api-key"
+                      checked={row.isActive}
+                      disabled={row.isNew}
+                      onChange={() => handleSelectActive(row)}
+                      title={t("settings.apiKeys.activeKey")}
+                      className="shrink-0 accent-white cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={row.label}
+                      onChange={(e) => setRow(row.id, { label: e.target.value, error: null })}
+                      onBlur={() => {
+                        if (!row.isNew) {
+                          persistSavedKeys(apiKeys, apiKeys.find((r) => r.isActive)?.id ?? null)
+                            .then(() => reloadApiKeys())
+                            .catch((e) => setApiKeysError(String(e)));
+                        }
+                      }}
+                      placeholder={t("settings.apiKeys.keyLabelPlaceholder")}
+                      className="flex-1 min-w-0 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 transition-colors"
+                    />
+                    <button
+                      onClick={() => handleDeleteRow(row)}
+                      disabled={apiKeys.filter((r) => !r.isNew).length <= 1 && !row.isNew}
+                      title={t("settings.apiKeys.deleteKey")}
+                      className="shrink-0 text-xs px-3 py-2 rounded-lg bg-white/6 hover:bg-red-900/40 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-white/70 hover:text-red-300 transition-colors cursor-pointer"
+                    >
+                      {t("settings.apiKeys.deleteKey")}
+                    </button>
+                  </div>
+                  {!row.isNew && (
+                    <p className="text-xs text-white/50 font-mono px-1" title={t("settings.apiKeys.lastFour")}>
+                      {row.maskedKey}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={row.keyInput}
+                      onChange={(e) => setRow(row.id, { keyInput: e.target.value, error: null })}
+                      onKeyDown={(e) => e.key === "Enter" && handleVerifyRow(row)}
+                      placeholder={t("settings.apiKeys.keyPlaceholder")}
+                      className="flex-1 min-w-0 bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 transition-colors font-mono"
+                    />
+                    <button
+                      onClick={() => handleVerifyRow(row)}
+                      disabled={row.verifying || (row.isNew && !row.keyInput.trim())}
+                      className="shrink-0 text-sm px-4 py-2 rounded-lg bg-white/10 hover:bg-white/16 border border-white/15 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors cursor-pointer"
+                    >
+                      {row.verifying ? t("apiSetup.verifying") : t("settings.apiKeys.verifySave")}
+                    </button>
+                  </div>
+                  {row.error && (
+                    <p className="text-xs text-red-400">{row.error}</p>
+                  )}
+                  {row.isActive && (
+                    <p
+                      title={t("settings.apiKeys.usageTitle")}
+                      className="text-sm font-mono text-white/80 px-1"
+                    >
+                      {u.used}/{u.limit}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
             <div className="flex items-center justify-between">
-              {apiKeySaved && <span className="text-xs text-emerald-400">{t("settings.saved")}</span>}
+              {apiKeySaved && <span className="text-xs text-emerald-400">{t("settings.apiKeys.verified")}</span>}
               <button
-                onClick={handleSaveApiKey}
-                disabled={apiKeyVerifying || !apiKey.trim() || apiKey.trim() === apiKeyLoaded}
-                className="ml-auto text-sm px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/16 border border-white/15 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors cursor-pointer"
+                onClick={handleAddKey}
+                className="ms-auto text-sm px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/16 border border-white/15 text-white transition-colors cursor-pointer"
               >
-                {apiKeyVerifying ? t("apiSetup.verifying") : t("settings.apiKeySave")}
+                {t("settings.apiKeys.addKey")}
               </button>
             </div>
           </div>
@@ -422,13 +648,13 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
 
         {/* ── Support ───────────────────────────────────────────────────── */}
         <section className="pb-2">
-          <SectionHeader>Support</SectionHeader>
+          <SectionHeader>{t("settings.sectionSupport")}</SectionHeader>
           <button
             onClick={() => openUrl(BMC_URL)}
             className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl border border-yellow-500/20 bg-yellow-500/6 hover:bg-yellow-500/12 hover:border-yellow-500/35 text-yellow-300/80 hover:text-yellow-200 transition-all cursor-pointer"
           >
             <span className="text-lg leading-none">☕</span>
-            <span className="text-sm font-medium">Buy me a coffee</span>
+            <span className="text-sm font-medium">{t("settings.buyMeACoffee")}</span>
           </button>
         </section>
 

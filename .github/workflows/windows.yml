@@ -1,0 +1,49 @@
+# Windows-only build for Splashy-fa (Persian + multi-key).
+# Modeled on upstream release.yml's build job, but:
+#  - manual trigger only (workflow_dispatch), no tag, no draft release
+#  - windows-latest only (no macOS/Linux jobs)
+#  - NO UNSPLASH_CLIENT_ID secret: no API key is baked into the installer;
+#    the user enters their key(s) in the app's Settings.
+#  - No TAURI_SIGNING_PRIVATE_KEY: the installer is unsigned.
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Windows installer
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ""
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: splashy-windows-fa
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe

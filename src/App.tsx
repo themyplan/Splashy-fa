@@ -211,7 +211,7 @@ useEffect(() => {
       {/* Sidebar blur gradient overlay — same two-layer crossfade */}
       {layerA && (
         <div
-          className="absolute top-0 bottom-0 left-0 pointer-events-none transition-opacity duration-1000 ease-in-out"
+          className="absolute top-0 bottom-0 start-0 pointer-events-none transition-opacity duration-1000 ease-in-out sidebar-glow"
           style={{
             opacity: showB ? 0 : 1,
             width: "180px",
@@ -220,14 +220,12 @@ useEffect(() => {
             backgroundPosition: "center",
             filter: "blur(32px) brightness(0.4)",
             transform: "scale(1.1)",
-            maskImage: "linear-gradient(to right, black 40%, transparent 100%)",
-            WebkitMaskImage: "linear-gradient(to right, black 40%, transparent 100%)",
           }}
         />
       )}
       {layerB && (
         <div
-          className="absolute top-0 bottom-0 left-0 pointer-events-none transition-opacity duration-1000 ease-in-out"
+          className="absolute top-0 bottom-0 start-0 pointer-events-none transition-opacity duration-1000 ease-in-out sidebar-glow"
           style={{
             opacity: showB ? 1 : 0,
             width: "180px",
@@ -236,8 +234,6 @@ useEffect(() => {
             backgroundPosition: "center",
             filter: "blur(32px) brightness(0.4)",
             transform: "scale(1.1)",
-            maskImage: "linear-gradient(to right, black 40%, transparent 100%)",
-            WebkitMaskImage: "linear-gradient(to right, black 40%, transparent 100%)",
           }}
         />
       )}

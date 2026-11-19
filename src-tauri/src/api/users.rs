@@ -96,7 +96,7 @@ pub async fn follow_user(username: String) -> Result<UserSummary, String> {
     log::info!("[users] follow_user: raw input={:?}", username);
     let username = extract_username(&username)?;
     log::info!("[users] follow_user: resolved username={}", username);
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
     let api_user = client.get_user_profile(&username).await?;
 
     let user_dir = paths::users_dir()?.join(&username);

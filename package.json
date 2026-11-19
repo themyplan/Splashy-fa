@@ -1,7 +1,7 @@
 {
   "name": "my-wallpaper-app",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.7-fa.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/vazirmatn": "^5.3.0",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/api": "~2.9.0",
     "@tauri-apps/plugin-autostart": "^2.5.1",

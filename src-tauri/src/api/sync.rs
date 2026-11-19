@@ -15,7 +15,7 @@ pub async fn sync_users() -> Result<(), String> {
         .map(|t| t.value.clone())
         .collect();
 
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
     let now = Utc::now().to_rfc3339();
 
     for username in &usernames {
@@ -139,7 +139,7 @@ pub async fn sync_collections() -> Result<(), String> {
         .map(|t| t.value.clone())
         .collect();
 
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
     let now = Utc::now().to_rfc3339();
 
     for id in &ids {

@@ -67,7 +67,7 @@ export default function ColorsView({ refreshKey = 0 }: { refreshKey?: number }) 
               <button
                 key={color}
                 onClick={() => handleToggle(color, !enabled)}
-                className="animate-card-in rounded-2xl overflow-hidden border-2 transition-all duration-150 hover:scale-[1.03] hover:shadow-lg cursor-pointer text-left w-full"
+                className="animate-card-in rounded-2xl overflow-hidden border-2 transition-all duration-150 hover:scale-[1.03] hover:shadow-lg cursor-pointer text-start w-full"
                 style={{
                   animationDelay: `${idx * 30}ms`,
                   borderColor: enabled ? meta.ring : "transparent",

@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTranslation } from "react-i18next";
 
 const win = getCurrentWindow();
 const isMac = navigator.userAgent.includes("Mac");
@@ -8,6 +9,7 @@ function onDragStart(e: React.MouseEvent) {
 }
 
 export default function TitleBar() {
+  const { t } = useTranslation();
   return (
     <div
       className="h-8 flex items-center shrink-0 select-none"
@@ -21,7 +23,7 @@ export default function TitleBar() {
         <button
           onClick={() => win.minimize()}
           className="w-11 flex items-center justify-center text-white/35 hover:text-white hover:bg-white/8 transition-colors cursor-default"
-          title="Minimize"
+          title={t("titleBar.minimize")}
         >
           <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
             <rect width="10" height="1" />
@@ -31,7 +33,7 @@ export default function TitleBar() {
         <button
           onClick={() => win.toggleMaximize()}
           className="w-11 flex items-center justify-center text-white/35 hover:text-white hover:bg-white/8 transition-colors cursor-default"
-          title="Maximize"
+          title={t("titleBar.maximize")}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
             <rect x="0.5" y="0.5" width="9" height="9" />
@@ -41,7 +43,7 @@ export default function TitleBar() {
         <button
           onClick={() => win.close()}
           className="w-11 flex items-center justify-center text-white/35 hover:text-white hover:bg-red-500/80 transition-colors cursor-default"
-          title="Close"
+          title={t("titleBar.close")}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
             <line x1="1" y1="1" x2="9" y2="9" />

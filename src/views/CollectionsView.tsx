@@ -176,8 +176,8 @@ export default function CollectionsView({ refreshKey = 0 }: { refreshKey?: numbe
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <button
                     onClick={() => openUrl(`https://unsplash.com/collections/${col.id}`)}
-                    className="font-semibold text-white text-sm leading-snug truncate hover:text-white/70 transition-colors cursor-pointer text-left"
-                    title="Open collection on Unsplash"
+                    className="font-semibold text-white text-sm leading-snug truncate hover:text-white/70 transition-colors cursor-pointer text-start"
+                    title={t("collections.openOnUnsplash")}
                   >
                     {col.title}
                   </button>
@@ -185,7 +185,7 @@ export default function CollectionsView({ refreshKey = 0 }: { refreshKey?: numbe
                     <button
                       onClick={() => setConfirmDelete(col)}
                       className="p-1 rounded-md text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-                      title="Delete collection"
+                      title={t("collections.deleteTooltip")}
                     >
                       <IconTrash className="w-3.5 h-3.5" />
                     </button>

@@ -54,7 +54,7 @@ pub async fn import_related_source(input: String) -> Result<RelatedSourceSummary
         return Err(format!("Photo {} is already a source.", photo_id));
     }
 
-    let client = crate::unsplash::get_client()?;
+    let client = crate::unsplash::client_from_active_key()?;
     let photo = client.get_photo(&photo_id).await.map_err(|e| {
         if e.contains("not found") || e.contains("404") {
             "Photo not found. Double-check the URL or ID.".to_string()
