@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { TopicWithEnabled } from "../types";
+import { relayImgUrl } from "../constants";
 import { IconTopics } from "../components/icons";
 import Toggle from "../components/Toggle";
 import FilterBar from "../components/FilterBar";
@@ -97,7 +98,7 @@ export default function TopicsView({ refreshKey = 0 }: { refreshKey?: number }) 
             >
               <div className="h-24 bg-white/4 flex items-center justify-center overflow-hidden">
                 {topic.cover_url ? (
-                  <img src={topic.cover_url} alt={topic.title} className="w-full h-full object-cover" />
+                  <img src={relayImgUrl(topic.cover_url)} alt={topic.title} className="w-full h-full object-cover" />
                 ) : (
                   <IconTopics className="w-8 h-8 text-white/20" />
                 )}

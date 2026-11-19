@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { CollectionSummary } from "../types";
+import { relayImgUrl } from "../constants";
 import { IconCollections, IconTrash } from "../components/icons";
 import Toggle from "../components/Toggle";
 import FilterBar from "../components/FilterBar";
@@ -163,7 +164,7 @@ export default function CollectionsView({ refreshKey = 0 }: { refreshKey?: numbe
                 className="h-32 w-full bg-white/4 overflow-hidden block relative group cursor-pointer"
               >
                 {col.cover_url ? (
-                  <img src={col.cover_url} alt={col.title} className="w-full h-full object-cover" />
+                  <img src={relayImgUrl(col.cover_url)} alt={col.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <IconCollections className="w-10 h-10 text-white/20" />

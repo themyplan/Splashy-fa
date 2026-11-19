@@ -1,3 +1,4 @@
+use super::relay_url;
 use super::models::{
     ApiCollection, ApiPhoto, ApiPhotoStatistics, ApiRelatedPhotosResult, ApiSearchPhotosResult,
     ApiTopic, ApiUserProfile,
@@ -65,13 +66,13 @@ impl UnsplashClient {
             .collect::<Vec<_>>()
             .join("&");
         log::debug!(
-            "[unsplash] GET https://api.unsplash.com/photos/random?{}",
+            "[unsplash] GET https://unsplash-relay.a44410527.workers.dev/api/photos/random?{}",
             query_str
         );
 
         let resp = self
             .inner
-            .get("https://api.unsplash.com/photos/random")
+            .get("https://unsplash-relay.a44410527.workers.dev/api/photos/random")
             .query(params)
             .header("Authorization", self.auth())
             .send()
@@ -101,10 +102,13 @@ impl UnsplashClient {
 
     /// Fire-and-forget download registration per Unsplash guidelines.
     pub async fn register_download(&self, url: &str) {
+        // The download-location URL comes back from the API as an
+        // api.unsplash.com URL; route it through the relay too.
+        let url = relay_url(url);
         log::debug!("[unsplash] register_download: GET {}", url);
         if let Ok(resp) = self
             .inner
-            .get(url)
+            .get(&url)
             .header("Authorization", self.auth())
             .send()
             .await
@@ -122,7 +126,7 @@ impl UnsplashClient {
         id: &str,
         etag: Option<&str>,
     ) -> Result<Option<(ApiCollection, Option<String>)>, String> {
-        let url = format!("https://api.unsplash.com/collections/{}", id);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/collections/{}", id);
         log::debug!("[unsplash] GET {} (etag={:?})", url, etag);
 
         let mut req = self.inner.get(&url).header("Authorization", self.auth());
@@ -158,7 +162,7 @@ impl UnsplashClient {
 
     /// GET /collections/:id
     pub async fn get_collection(&self, id: &str) -> Result<ApiCollection, String> {
-        let url = format!("https://api.unsplash.com/collections/{}", id);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/collections/{}", id);
         log::debug!("[unsplash] GET {}", url);
         let resp = self
             .inner
@@ -183,7 +187,7 @@ impl UnsplashClient {
 
     /// GET /users/:username
     pub async fn get_user_profile(&self, username: &str) -> Result<ApiUserProfile, String> {
-        let url = format!("https://api.unsplash.com/users/{}", username);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/users/{}", username);
         log::debug!("[unsplash] GET {}", url);
         let resp = self
             .inner
@@ -208,10 +212,10 @@ impl UnsplashClient {
 
     /// GET /topics — returns up to 30 topics.
     pub async fn get_topics(&self) -> Result<Vec<ApiTopic>, String> {
-        log::debug!("[unsplash] GET https://api.unsplash.com/topics?per_page=30");
+        log::debug!("[unsplash] GET https://unsplash-relay.a44410527.workers.dev/api/topics?per_page=30");
         let resp = self
             .inner
-            .get("https://api.unsplash.com/topics")
+            .get("https://unsplash-relay.a44410527.workers.dev/api/topics")
             .query(&[("per_page", "30")])
             .header("Authorization", self.auth())
             .send()
@@ -237,7 +241,7 @@ impl UnsplashClient {
         log::debug!("[unsplash] GET /photos?page={}&per_page={}&order_by={}", page, per_page, order_by);
         let resp = self
             .inner
-            .get("https://api.unsplash.com/photos")
+            .get("https://unsplash-relay.a44410527.workers.dev/api/photos")
             .query(&[
                 ("page", page.to_string()),
                 ("per_page", per_page.to_string()),
@@ -259,7 +263,7 @@ impl UnsplashClient {
 
     /// GET /photos/:photo_id — retrieve a single photo by ID.
     pub async fn get_photo(&self, photo_id: &str) -> Result<ApiPhoto, String> {
-        let url = format!("https://api.unsplash.com/photos/{}", photo_id);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/photos/{}", photo_id);
         log::debug!("[unsplash] GET {}", url);
         let resp = self
             .inner
@@ -288,7 +292,7 @@ impl UnsplashClient {
         resolution: &str,
         quantity: u32,
     ) -> Result<ApiPhotoStatistics, String> {
-        let url = format!("https://api.unsplash.com/photos/{}/statistics", photo_id);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/photos/{}/statistics", photo_id);
         log::debug!("[unsplash] GET {}?resolution={}&quantity={}", url, resolution, quantity);
         let resp = self
             .inner
@@ -313,7 +317,7 @@ impl UnsplashClient {
 
     /// GET /photos/:photo_id/download — track a download per Unsplash guidelines.
     pub async fn track_photo_download(&self, photo_id: &str) -> Result<(), String> {
-        let url = format!("https://api.unsplash.com/photos/{}/download", photo_id);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/photos/{}/download", photo_id);
         log::debug!("[unsplash] GET {} (track download)", url);
         let resp = self
             .inner
@@ -362,7 +366,7 @@ impl UnsplashClient {
 
         let resp = self
             .inner
-            .get("https://api.unsplash.com/search/photos")
+            .get("https://unsplash-relay.a44410527.workers.dev/api/search/photos")
             .query(&params)
             .header("Authorization", self.auth())
             .send()
@@ -387,7 +391,7 @@ impl UnsplashClient {
         log::debug!("[unsplash] GET /collections?page={}&per_page={}", page, per_page);
         let resp = self
             .inner
-            .get("https://api.unsplash.com/collections")
+            .get("https://unsplash-relay.a44410527.workers.dev/api/collections")
             .query(&[("page", page.to_string()), ("per_page", per_page.to_string())])
             .header("Authorization", self.auth())
             .send()
@@ -412,7 +416,7 @@ impl UnsplashClient {
         orientation: Option<&str>,
     ) -> Result<Vec<ApiPhoto>, String> {
         let url = format!(
-            "https://api.unsplash.com/collections/{}/photos",
+            "https://unsplash-relay.a44410527.workers.dev/api/collections/{}/photos",
             collection_id
         );
         log::debug!("[unsplash] GET {}?page={}&per_page={}", url, page, per_page);
@@ -454,7 +458,7 @@ impl UnsplashClient {
         order_by: &str,
         orientation: Option<&str>,
     ) -> Result<Vec<ApiPhoto>, String> {
-        let url = format!("https://api.unsplash.com/users/{}/photos", username);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/users/{}/photos", username);
         log::debug!("[unsplash] GET {}?page={}&per_page={}&order_by={}", url, page, per_page, order_by);
         let mut params = vec![
             ("page", page.to_string()),
@@ -493,7 +497,7 @@ impl UnsplashClient {
         page: u32,
         per_page: u32,
     ) -> Result<Vec<ApiCollection>, String> {
-        let url = format!("https://api.unsplash.com/users/{}/collections", username);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/users/{}/collections", username);
         log::debug!("[unsplash] GET {}?page={}&per_page={}", url, page, per_page);
         let resp = self
             .inner
@@ -525,7 +529,7 @@ impl UnsplashClient {
         order_by: &str,
         orientation: Option<&str>,
     ) -> Result<Vec<ApiPhoto>, String> {
-        let url = format!("https://api.unsplash.com/users/{}/likes", username);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/users/{}/likes", username);
         log::debug!("[unsplash] GET {}?page={}&per_page={}&order_by={}", url, page, per_page, order_by);
         let mut params = vec![
             ("page", page.to_string()),
@@ -567,7 +571,7 @@ impl UnsplashClient {
         log::debug!("[unsplash] GET /topics?page={}&per_page={}&order_by={}", page, per_page, order_by);
         let resp = self
             .inner
-            .get("https://api.unsplash.com/topics")
+            .get("https://unsplash-relay.a44410527.workers.dev/api/topics")
             .query(&[
                 ("page", page.to_string()),
                 ("per_page", per_page.to_string()),
@@ -596,7 +600,7 @@ impl UnsplashClient {
         order_by: &str,
         orientation: Option<&str>,
     ) -> Result<Vec<ApiPhoto>, String> {
-        let url = format!("https://api.unsplash.com/topics/{}/photos", id_or_slug);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/topics/{}/photos", id_or_slug);
         log::debug!("[unsplash] GET {}?page={}&per_page={}&order_by={}", url, page, per_page, order_by);
         let mut params = vec![
             ("page", page.to_string()),
@@ -635,7 +639,7 @@ impl UnsplashClient {
         photo_id: &str,
         page: u32,
     ) -> Result<ApiRelatedPhotosResult, String> {
-        let url = format!("https://api.unsplash.com/photos/{}/related", photo_id);
+        let url = format!("https://unsplash-relay.a44410527.workers.dev/api/photos/{}/related", photo_id);
         log::debug!("[unsplash] GET {}?page={}", url, page);
         let resp = self
             .inner
@@ -663,9 +667,12 @@ impl UnsplashClient {
     /// NOTE: image downloads come from images.unsplash.com and do NOT count
     /// against the API rate limit, so no rate-limit headers are recorded here.
     pub async fn download_image(&self, url: &str) -> Result<(Vec<u8>, String), String> {
+        // Image URLs come back from the API as images.unsplash.com URLs;
+        // fetch them through the relay (/img) so they load without a VPN.
+        let url = relay_url(url);
         let resp = self
             .inner
-            .get(url)
+            .get(&url)
             .send()
             .await
             .map_err(|e| format!("Failed to download image: {}", e))?;

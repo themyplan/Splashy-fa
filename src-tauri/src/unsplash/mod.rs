@@ -69,6 +69,37 @@ pub fn reset_rate_limit() {
     }
 }
 
+/// Cloudflare Unsplash relay (same Worker as the Resplash app:
+/// https://unsplash-relay.a44410527.workers.dev). api.unsplash.com is
+/// unreachable from Iran without a VPN, so ALL Unsplash traffic goes
+/// through the relay: /api/* -> api.unsplash.com/*, /img/* ->
+/// images.unsplash.com/*. The relay forwards the app's own
+/// `Authorization: Client-ID` header unchanged and passes upstream
+/// response headers (including X-Ratelimit-Limit/Remaining) through,
+/// so rate-limit counting keeps working. No key lives in the Worker.
+pub const RELAY_BASE: &str = "https://unsplash-relay.a44410527.workers.dev";
+
+/// Rewrite an Unsplash URL to its relay equivalent. Idempotent: a URL
+/// that already points at the relay is returned unchanged, and
+/// non-Unsplash URLs (e.g. unsplash.com web pages) pass through.
+pub fn relay_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("https://api.unsplash.com/") {
+        return format!("{RELAY_BASE}/api/{rest}");
+    }
+    if url == "https://api.unsplash.com" {
+        return format!("{RELAY_BASE}/api");
+    }
+    if let Some(rest) = url.strip_prefix("https://images.unsplash.com/") {
+        return format!("{RELAY_BASE}/img/{rest}");
+    }
+    url.to_string()
+}
+
+/// API endpoint URL through the relay, e.g. api_url("photos/random").
+pub fn api_url(path: &str) -> String {
+    format!("{RELAY_BASE}/api/{}", path.trim_start_matches('/'))
+}
+
 /// Build a client using the ACTIVE API key from settings.
 /// This is the single funnel every Unsplash call goes through — no other
 /// code builds an UnsplashClient directly. Returns an error if no key has

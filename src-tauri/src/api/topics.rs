@@ -108,7 +108,8 @@ pub async fn sync_topics() -> Result<Vec<TopicWithEnabled>, String> {
         let cover_url = topic
             .cover_photo
             .as_ref()
-            .and_then(|p| p.urls.regular.clone().or_else(|| p.urls.small.clone()));
+            .and_then(|p| p.urls.regular.clone().or_else(|| p.urls.small.clone()))
+            .map(|u| crate::unsplash::relay_url(&u));
 
         // Download cover locally as well (offline cache)
         if let (Some(ref photo_id), Some(ref url)) = (&cover_photo_id, &cover_url) {

@@ -79,7 +79,7 @@ async fn probe_key(key: &str, entry_id: &str, record: bool) -> Result<(), String
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
     let resp = client
-        .get("https://api.unsplash.com/photos")
+        .get("https://unsplash-relay.a44410527.workers.dev/api/photos")
         .query(&[("per_page", "1")])
         .header("Authorization", format!("Client-ID {}", key))
         .send()
