@@ -93,6 +93,57 @@ pub async fn change_wallpaper() -> Result<String, String> {
     Ok(result_msg)
 }
 
+/// Restore the previous wallpaper: swap current <-> previous (image + meta)
+/// and set the swapped-in image as the desktop wallpaper. Swapping (rather
+/// than overwriting) means the user can toggle back and forth between the
+/// two. A missing current (first wallpaper ever) is fine: previous simply
+/// becomes current.
+pub async fn restore_previous_wallpaper() -> Result<String, String> {
+    let _guard = change_lock().lock().await;
+    log::info!("[wallpaper] Restoring previous wallpaper");
+
+    let current_dir = paths::current_dir()?;
+    let current_img  = current_dir.join("current_wallpaper.jpg");
+    let current_meta = current_dir.join("current_wallpaper_meta.json");
+    let prev_img     = current_dir.join("previous_wallpaper.jpg");
+    let prev_meta    = current_dir.join("previous_wallpaper_meta.json");
+
+    if !prev_img.exists() {
+        return Err("No previous wallpaper to restore".to_string());
+    }
+
+    let tmp_img  = current_dir.join("swap_tmp_wallpaper.jpg");
+    let tmp_meta = current_dir.join("swap_tmp_wallpaper_meta.json");
+    let _ = std::fs::remove_file(&tmp_img);
+    let _ = std::fs::remove_file(&tmp_meta);
+
+    if current_img.exists() {
+        std::fs::rename(&current_img, &tmp_img)
+            .map_err(|e| format!("Failed to swap wallpapers: {}", e))?;
+    }
+    std::fs::rename(&prev_img, &current_img)
+        .map_err(|e| format!("Failed to swap wallpapers: {}", e))?;
+    if tmp_img.exists() {
+        std::fs::rename(&tmp_img, &prev_img)
+            .map_err(|e| format!("Failed to swap wallpapers: {}", e))?;
+    }
+    if current_meta.exists() {
+        let _ = std::fs::rename(&current_meta, &tmp_meta);
+    }
+    if prev_meta.exists() {
+        let _ = std::fs::rename(&prev_meta, &current_meta);
+    }
+    if tmp_meta.exists() {
+        let _ = std::fs::rename(&tmp_meta, &prev_meta);
+    }
+
+    set_wallpaper(&current_img, Some(&prev_img))?;
+
+    Ok(read_meta(&current_meta)
+        .map(|m| format!("Wallpaper restored!\nPhoto by {} — https://unsplash.com/photos/{}", m.author_name, m.photo_id))
+        .unwrap_or_else(|| "Wallpaper restored!".to_string()))
+}
+
 /// Run a getter cycle and save the result as `next_wallpaper.jpg/.json`.
 /// Exposed publicly so callers can spawn it and emit an event on completion.
 pub async fn prefetch_next_wallpaper() -> Result<(), String> {

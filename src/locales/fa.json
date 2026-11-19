@@ -117,8 +117,10 @@
     "next": "بعدی",
     "photoBy": "عکس از {{name}} در Unsplash",
     "previous": "قبلی",
+    "previousWallpaper": "تصویر پس‌زمینه قبلی",
     "refreshWallpaper": "تازه‌سازی تصویر پس‌زمینه",
     "refreshing": "در حال تازه‌سازی…",
+    "restoredPrevious": "تصویر پس‌زمینه قبلی برگردانده شد",
     "saveToFolder": "ذخیره در پوشه",
     "savedAs": "ذخیره شد با نام {{filename}}",
     "saving": "در حال ذخیره…"
@@ -227,9 +229,7 @@
     "startWithWindowsDesc": "هنگام روشن کردن رایانه به‌صورت خودکار باز شود",
     "title": "تنظیمات",
     "scheduleHour": "ساعت",
-    "scheduleMinute": "دقیقه",
-    "sectionSupport": "حمایت",
-    "buyMeACoffee": "یک قهوه مهمانم کن"
+    "scheduleMinute": "دقیقه"
   },
   "titleBar": {
     "close": "بستن",

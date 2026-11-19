@@ -21,8 +21,10 @@
   "home": {
     "refreshWallpaper": "Refresh Wallpaper",
     "refreshing": "Refreshing…",
+    "restoredPrevious": "Previous wallpaper restored",
     "activeSources": "Active Sources",
     "previous": "Previous",
+    "previousWallpaper": "Previous wallpaper",
     "next": "Next",
     "photoBy": "Photo by {{name}} on Unsplash",
     "saveToFolder": "Save to folder",
@@ -183,9 +185,7 @@
       "usageTitle": "API usage"
     },
     "scheduleHour": "Hour",
-    "scheduleMinute": "Minute",
-    "sectionSupport": "Support",
-    "buyMeACoffee": "Buy me a coffee"
+    "scheduleMinute": "Minute"
   },
   "apiSetup": {
     "title": "Connect to Unsplash",

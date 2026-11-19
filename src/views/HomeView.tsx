@@ -93,6 +93,8 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
   const [saveStatusAnimKey, setSaveStatusAnimKey] = useState(0);
   const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [restoring, setRestoring] = useState(false);
+
   const [addingRelated, setAddingRelated] = useState(false);
   const [relatedStatus, setRelatedStatus] = useState<string | null>(null);
   const [relatedStatusVisible, setRelatedStatusVisible] = useState(false);
@@ -178,6 +180,21 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
     }
   };
 
+  const handleRestorePrevious = async () => {
+    if (!adjacent.previous || restoring) return;
+    setRestoring(true);
+    setSaveStatus(null);
+    try {
+      await invoke<string>("restore_previous_wallpaper");
+      await loadWallpaper();
+      setSaveStatus(t("home.restoredPrevious"));
+    } catch (e) {
+      setSaveStatus(`Error: ${String(e)}`);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const handleSave = async () => {
     const folder = await open({ directory: true, multiple: false, title: t("home.chooseFolderTitle") });
     if (!folder) return;
@@ -224,6 +241,34 @@ export default function HomeView({ onRefresh, loading, status, isError }: HomeVi
           <IconRefresh className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
           {loading ? t("home.refreshing") : t("home.refreshWallpaper")}
         </button>
+
+        {/* Previous-wallpaper box: click to restore it as the current one
+            (swaps with the current wallpaper, so it toggles back and forth). */}
+        {adjacent.previous && (
+          <button
+            onClick={handleRestorePrevious}
+            disabled={restoring}
+            className="relative w-72 overflow-hidden rounded-2xl text-start transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="absolute inset-0 -z-10">
+              <GlassPanel cornerRadius={16} className="w-full h-full" />
+            </div>
+            <div className="relative w-full h-32 overflow-hidden">
+              <img
+                key={`${adjacent.previous.photo_id}-${cacheKey}`}
+                src={`${convertFileSrc(adjacent.previous.path)}?t=${cacheKey}`}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            </div>
+            <div className="px-3 py-2">
+              <div className="text-xs font-medium text-white/90">{t("home.previousWallpaper")}</div>
+              <div className="text-[11px] text-white/60 truncate">
+                {t("home.photoBy", { name: adjacent.previous.author_name })}
+              </div>
+            </div>
+          </button>
+        )}
 
         {statusVisible && status && (
           <div className={`absolute top-[calc(50%+3rem)] max-w-sm w-full text-center text-sm px-4 py-3 rounded-xl overflow-hidden whitespace-pre-line ${

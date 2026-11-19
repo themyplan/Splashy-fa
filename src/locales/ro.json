@@ -21,8 +21,10 @@
   "home": {
     "refreshWallpaper": "Schimbă Tapetul",
     "refreshing": "Se schimbă…",
+    "restoredPrevious": "Tapetul anterior a fost restaurat",
     "activeSources": "Surse Active",
     "previous": "Anterior",
+    "previousWallpaper": "Imaginea de fundal anterioară",
     "next": "Următor",
     "photoBy": "Fotografie de {{name}} pe Unsplash",
     "saveToFolder": "Salvează în dosar",

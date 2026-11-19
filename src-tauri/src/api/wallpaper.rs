@@ -66,6 +66,15 @@ pub async fn get_adjacent_wallpapers() -> Result<AdjacentWallpapers, String> {
     })
 }
 
+/// Restore the previous wallpaper (swap current <-> previous) and set it.
+/// Emits "wallpaper-changed" so the UI reloads current + adjacent info.
+#[tauri::command]
+pub async fn restore_previous_wallpaper(app: tauri::AppHandle) -> Result<String, String> {
+    let result = crate::wallpaper::restore_previous_wallpaper().await?;
+    let _ = app.emit("wallpaper-changed", ());
+    Ok(result)
+}
+
 /// Extract a representative accent colour ("#rrggbb") from the current
 /// wallpaper. Uses the colour cached in the meta JSON when available (written
 /// at download time) and only decodes the image as a fallback for older

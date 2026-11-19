@@ -2,15 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { ApiKeyEntry, ApiKeySaveEntry, AppSettings, RateLimitStatus } from "../types";
 import { LANGUAGES, applyLayoutDirection } from "../i18n";
 import { DEFAULT_API_BASE_URL } from "../constants";
 import CronScheduler from "../components/CronScheduler";
 import Toggle from "../components/Toggle";
-
-const BMC_URL = "https://buymeacoffee.com/halfaxa";
 
 function getOSStartLabel(): "startWithWindows" | "startWithMac" | "startWithLinux" {
   const p = navigator.platform.toLowerCase();
@@ -702,18 +699,6 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
               />
             </div>
           </div>
-        </section>
-
-        {/* ── Support ───────────────────────────────────────────────────── */}
-        <section className="pb-2">
-          <SectionHeader>{t("settings.sectionSupport")}</SectionHeader>
-          <button
-            onClick={() => openUrl(BMC_URL)}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl border border-yellow-500/20 bg-yellow-500/6 hover:bg-yellow-500/12 hover:border-yellow-500/35 text-yellow-300/80 hover:text-yellow-200 transition-all cursor-pointer"
-          >
-            <span className="text-lg leading-none">☕</span>
-            <span className="text-sm font-medium">{t("settings.buyMeACoffee")}</span>
-          </button>
         </section>
 
         {/* ── About ─────────────────────────────────────────────────────── */}

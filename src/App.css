@@ -9,6 +9,24 @@
   font-family: "Vazirmatn", Tahoma, "Segoe UI", sans-serif;
 }
 
+/* ── Persian sentences keep their own reading direction ─────────────── */
+/* When the user picks LTR page layout (چپ‌چین), the app root is dir="ltr",
+   so Persian paragraphs inherit LTR bidi ordering and sentences with a
+   Latin word inside (e.g. "…از عکس‌های مطابق Unsplash انتخاب می‌شوند")
+   come out scrambled — words out of order, "پس‌زمینه" rendered as
+   "پرسرمنه". `unicode-bidi: plaintext` makes each text block follow its
+   own first strong character instead: Persian text reads RTL, Latin text
+   reads LTR, whichever the page layout is. This touches ONLY inline text
+   ordering — layout (sidebar, top bar, flex order) is untouched, and in
+   RTL mode the first strong character is already Persian, so rendering
+   there is unchanged. */
+[lang="fa"] p, [lang="fa"] h1, [lang="fa"] h2, [lang="fa"] h3, [lang="fa"] h4,
+[lang="fa"] span, [lang="fa"] label, [lang="fa"] button, [lang="fa"] a,
+[lang="fa"] li, [lang="fa"] td, [lang="fa"] th, [lang="fa"] div,
+[lang="fa"] input, [lang="fa"] textarea {
+  unicode-bidi: plaintext;
+}
+
 /* Latin-only mono text (usage counter 25/50, masked keys, cron strings)
    must stay left-to-right inside an RTL page. */
 [dir="rtl"] .font-mono {
