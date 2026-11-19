@@ -101,13 +101,16 @@ async fn probe_key(key: &str, entry_id: &str, record: bool) -> Result<(), String
 #[tauri::command]
 pub async fn get_settings() -> Result<AppSettings, String> {
     let s = load_settings()?;
+    // Resolve the key BEFORE moving the String fields out of `s` below:
+    // borrowing `s` after a partial move is E0382.
+    let api_key = active_api_key(&s)
+        .map(|e| e.key.clone())
+        .or_else(|| s.api_key.clone());
     Ok(AppSettings {
         quality: s.quality,
         orientation: s.orientation,
         wallpaper_cron: s.wallpaper_cron,
-        api_key: active_api_key(&s)
-            .map(|e| e.key.clone())
-            .or(s.api_key),
+        api_key,
     })
 }
 
