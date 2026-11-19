@@ -93,6 +93,12 @@ pub struct Settings {
     /// Default "ltr"; the user picks RTL in Settings if wanted.
     #[serde(default = "default_layout_direction")]
     pub layout_direction: String,
+    /// Wallpaper fit: "fill" (Crop, WallpaperStyle 10), "fit" (Fit, 6),
+    /// "stretch" (2), "tile" (0 + tiled), "center" (0), "span" (22).
+    /// Default "fill" = the hardcoded behavior of every build before
+    /// 1.0.7-5, which overwrote the user's registry edit on each change.
+    #[serde(default = "default_wallpaper_fit")]
+    pub wallpaper_fit: String,
 }
 
 fn default_wallpaper_cron() -> String { "0 * * * *".to_string() }
@@ -101,6 +107,7 @@ fn default_orientation() -> String { "landscape".to_string() }
 fn default_quality() -> String { "regular".to_string() }
 fn default_api_base_url() -> String { crate::unsplash::RELAY_BASE.to_string() }
 fn default_layout_direction() -> String { "ltr".to_string() }
+fn default_wallpaper_fit() -> String { "fill".to_string() }
 
 /// Effective server base URL (never empty — falls back to the relay).
 pub fn effective_api_base_url(settings: &Settings) -> String {
@@ -109,6 +116,17 @@ pub fn effective_api_base_url(settings: &Settings) -> String {
         default_api_base_url()
     } else {
         base.to_string()
+    }
+}
+
+/// Effective wallpaper fit: one of the six Windows modes, anything else
+/// falls back to "fill" (the old hardcoded behavior).
+pub fn effective_wallpaper_fit(settings: &Settings) -> String {
+    match settings.wallpaper_fit.trim().to_lowercase().as_str() {
+        "fit" | "stretch" | "tile" | "center" | "span" => {
+            settings.wallpaper_fit.trim().to_lowercase()
+        }
+        _ => "fill".to_string(),
     }
 }
 
@@ -126,6 +144,7 @@ impl Default for Settings {
             active_api_key_id: None,
             api_base_url: default_api_base_url(),
             layout_direction: "ltr".to_string(),
+            wallpaper_fit: "fill".to_string(),
         }
     }
 }
@@ -189,13 +208,15 @@ pub fn load_settings() -> Result<Settings, String> {
         settings.active_api_key_id = None;
     }
 
-    // Normalize the server address and direction: an empty address falls
-    // back to the relay default (never to direct api.unsplash.com), and
-    // anything but "rtl" means "ltr" (the original upstream layout).
+    // Normalize the server address, direction and fit: an empty address
+    // falls back to the relay default (never to direct api.unsplash.com),
+    // anything but "rtl" means "ltr" (the original upstream layout), and
+    // an unknown fit means "fill" (the old hardcoded behavior).
     settings.api_base_url = effective_api_base_url(&settings);
     if settings.layout_direction != "rtl" {
         settings.layout_direction = "ltr".to_string();
     }
+    settings.wallpaper_fit = effective_wallpaper_fit(&settings);
 
     // One-time migration: if all groups are empty but targets exist, populate all groups.
     if settings.time_groups.iter().all(|g| g.target_ids.is_empty())

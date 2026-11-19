@@ -75,6 +75,14 @@ pub async fn restore_previous_wallpaper(app: tauri::AppHandle) -> Result<String,
     Ok(result)
 }
 
+/// Re-apply the saved fit mode to the wallpaper that is already set
+/// (no image change). Called when the user picks a new fit in Settings,
+/// so the desktop updates at once instead of at the next wallpaper change.
+#[tauri::command]
+pub async fn apply_wallpaper_fit() -> Result<(), String> {
+    crate::wallpaper::apply_wallpaper_fit()
+}
+
 /// Extract a representative accent colour ("#rrggbb") from the current
 /// wallpaper. Uses the colour cached in the meta JSON when available (written
 /// at download time) and only decodes the image as a fallback for older

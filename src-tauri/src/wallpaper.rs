@@ -308,6 +308,40 @@ fn compute_next_fire_time(cron_expr: &str) -> Option<NaiveTime> {
     Some(next_local.naive_local().time())
 }
 
+/// Map the user's fit setting to the `wallpaper` crate mode.
+/// Fill = Crop (WallpaperStyle 10), Fit = Fit (6), Stretch = Stretch (2),
+/// Tile = Tile, Center = Center, Span = Span (22). Unknown values fall
+/// back to Crop — the behavior of every build before 1.0.7-5.
+pub fn wallpaper_mode(fit: &str) -> wallpaper::Mode {
+    match fit {
+        "fit" => wallpaper::Mode::Fit,
+        "stretch" => wallpaper::Mode::Stretch,
+        "tile" => wallpaper::Mode::Tile,
+        "center" => wallpaper::Mode::Center,
+        "span" => wallpaper::Mode::Span,
+        _ => wallpaper::Mode::Crop,
+    }
+}
+
+/// Re-apply the user's chosen fit mode to the wallpaper that is already
+/// set, without changing the image. Used when the user picks a new fit in
+/// Settings so the desktop updates at once instead of waiting for the
+/// next wallpaper change. No-op on macOS (the macOS path always uses fill).
+pub fn apply_wallpaper_fit() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mode = load_settings()
+            .map(|s| wallpaper_mode(&crate::settings::effective_wallpaper_fit(&s)))
+            .unwrap_or(wallpaper::Mode::Crop);
+        wallpaper::set_mode(mode)
+            .map_err(|e| format!("Failed to set wallpaper mode: {}", e))
+    }
+}
+
 /// Set the desktop wallpaper to the file at `path`.
 pub fn set_wallpaper(path: &PathBuf, prev_path: Option<&PathBuf>) -> Result<(), String> {
     let path_str = path
@@ -333,7 +367,16 @@ pub fn set_wallpaper(path: &PathBuf, prev_path: Option<&PathBuf>) -> Result<(), 
     {
         wallpaper::set_from_path(&path_str)
             .map_err(|e| format!("Failed to set wallpaper: {}", e))?;
-        wallpaper::set_mode(wallpaper::Mode::Crop)
+        // Apply the user's chosen fit on EVERY set. Before 1.0.7-5 this
+        // was hardcoded to Crop (Fill, WallpaperStyle 10), which is why
+        // a registry edit to Fit (6) was overwritten on every change.
+        // Loading the setting here (rather than threading it through the
+        // callers) guarantees change_wallpaper AND restore_previous
+        // both honor it.
+        let mode = load_settings()
+            .map(|s| wallpaper_mode(&crate::settings::effective_wallpaper_fit(&s)))
+            .unwrap_or(wallpaper::Mode::Crop);
+        wallpaper::set_mode(mode)
             .map_err(|e| format!("Failed to set wallpaper mode: {}", e))?;
         Ok(())
     }

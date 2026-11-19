@@ -17,6 +17,7 @@ pub struct AppSettings {
     pub api_key: Option<String>,
     pub api_base_url: String,
     pub layout_direction: String,
+    pub wallpaper_fit: String,
 }
 
 /// One saved key as the frontend is allowed to see it: the full key is
@@ -115,6 +116,7 @@ pub async fn get_settings() -> Result<AppSettings, String> {
         .or_else(|| s.api_key.clone());
     let api_base_url = crate::settings::effective_api_base_url(&s);
     let layout_direction = s.layout_direction.clone();
+    let wallpaper_fit = crate::settings::effective_wallpaper_fit(&s);
     Ok(AppSettings {
         quality: s.quality,
         orientation: s.orientation,
@@ -122,6 +124,7 @@ pub async fn get_settings() -> Result<AppSettings, String> {
         api_key,
         api_base_url,
         layout_direction,
+        wallpaper_fit,
     })
 }
 
@@ -317,6 +320,7 @@ pub async fn update_settings(
     wallpaper_cron: String,
     api_base_url: String,
     layout_direction: String,
+    wallpaper_fit: String,
 ) -> Result<(), String> {
     let valid_qualities = ["raw", "full", "regular", "small", "thumb"];
     if !valid_qualities.contains(&quality.as_str()) {
@@ -325,6 +329,10 @@ pub async fn update_settings(
     let valid_orientations = ["landscape", "portrait", "squarish"];
     if !valid_orientations.contains(&orientation.as_str()) {
         return Err(format!("Invalid orientation: {}", orientation));
+    }
+    let valid_fits = ["fill", "fit", "stretch", "tile", "center", "span"];
+    if !valid_fits.contains(&wallpaper_fit.as_str()) {
+        return Err(format!("Invalid wallpaper fit: {}", wallpaper_fit));
     }
     validate_cron(&wallpaper_cron)?;
 
@@ -348,6 +356,7 @@ pub async fn update_settings(
     s.wallpaper_cron = wallpaper_cron.clone();
     s.api_base_url = api_base_url;
     s.layout_direction = layout_direction;
+    s.wallpaper_fit = wallpaper_fit;
     save_settings(&s)?;
 
     notify_cron_changed(wallpaper_cron);

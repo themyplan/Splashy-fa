@@ -91,6 +91,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [layoutDirection, setLayoutDirection] = useState<"ltr" | "rtl">("ltr");
+  const [wallpaperFit, setWallpaperFit] = useState("fill");
   const [version, setVersion] = useState("");
 
   const BASIC_OPTIONS = [
@@ -117,6 +118,15 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     { value: "squarish",  label: t("settings.orientationSquarish"),  description: t("settings.orientationSquarishDesc") },
   ];
 
+  const FIT_OPTIONS = [
+    { value: "fill",    label: t("settings.fitFill"),    description: t("settings.fitFillDesc") },
+    { value: "fit",     label: t("settings.fitFit"),     description: t("settings.fitFitDesc") },
+    { value: "stretch", label: t("settings.fitStretch"), description: t("settings.fitStretchDesc") },
+    { value: "tile",    label: t("settings.fitTile"),    description: t("settings.fitTileDesc") },
+    { value: "center",  label: t("settings.fitCenter"),  description: t("settings.fitCenterDesc") },
+    { value: "span",    label: t("settings.fitSpan"),    description: t("settings.fitSpanDesc") },
+  ];
+
   useEffect(() => {
     Promise.all([
       invoke<AppSettings>("get_settings"),
@@ -130,6 +140,7 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
         setCron(s.wallpaper_cron);
         setApiBaseUrl(s.api_base_url || DEFAULT_API_BASE_URL);
         setLayoutDirection(s.layout_direction === "rtl" ? "rtl" : "ltr");
+        setWallpaperFit(["fill", "fit", "stretch", "tile", "center", "span"].includes(s.wallpaper_fit) ? s.wallpaper_fit : "fill");
         setScheduleTab(BASIC_CRONS.has(s.wallpaper_cron) || isOnceDailyCron(s.wallpaper_cron) ? "basic" : "advanced");
         setStartOnLogin(autostart);
         setApiKeys(toRows(keys));
@@ -297,9 +308,9 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   };
 
-  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string) => {
+  const persistSettings = useCallback(async (q: string, o: string, c: string, base: string, dir: string, fit: string) => {
     try {
-      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir });
+      await invoke("update_settings", { quality: q, orientation: o, wallpaperCron: c, apiBaseUrl: base, layoutDirection: dir, wallpaperFit: fit });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setSaved(true);
       savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
@@ -308,22 +319,32 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
     }
   }, []);
 
-  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection); };
-  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection); };
-  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection); };
+  const handleQualityChange     = (v: string) => { setQuality(v);      persistSettings(v, orientation, cron, apiBaseUrl, layoutDirection, wallpaperFit); };
+  const handleOrientationChange = (v: string) => { setOrientation(v);  persistSettings(quality, v, cron, apiBaseUrl, layoutDirection, wallpaperFit); };
+  const handleCronChange        = (expr: string) => { setCron(expr);   persistSettings(quality, orientation, expr, apiBaseUrl, layoutDirection, wallpaperFit); };
 
   // Server address: empty means the relay default. Applies on blur/Enter.
   const handleApiBaseUrlSave = () => {
     const v = apiBaseUrl.trim();
     if (!v) setApiBaseUrl(DEFAULT_API_BASE_URL);
-    persistSettings(quality, orientation, cron, v, layoutDirection);
+    persistSettings(quality, orientation, cron, v, layoutDirection, wallpaperFit);
   };
 
   // Page direction: applies immediately, no restart needed.
   const handleLayoutDirectionChange = (dir: "ltr" | "rtl") => {
     setLayoutDirection(dir);
     applyLayoutDirection(dir);
-    persistSettings(quality, orientation, cron, apiBaseUrl, dir);
+    persistSettings(quality, orientation, cron, apiBaseUrl, dir, wallpaperFit);
+  };
+
+  // Wallpaper fit: saved, then applied at once to the current desktop
+  // wallpaper too, so the user sees the change immediately instead of
+  // waiting for the next wallpaper change. Best-effort: fails silently
+  // when no wallpaper is set yet.
+  const handleWallpaperFitChange = async (v: string) => {
+    setWallpaperFit(v);
+    await persistSettings(quality, orientation, cron, apiBaseUrl, layoutDirection, v);
+    try { await invoke("apply_wallpaper_fit"); } catch { /* no wallpaper set yet */ }
   };
 
   const handleLanguageChange = (code: string) => {
@@ -412,6 +433,29 @@ export default function SettingsView({ onApiKeyChange }: { onApiKeyChange: () =>
               <p className="text-[11px] text-white/50 mt-2">
                 {QUALITY_OPTIONS.find(o => o.value === quality)?.description}
               </p>
+            </div>
+
+            <div className="border-t border-white/8" />
+
+            {/* Wallpaper fit */}
+            <div>
+              <p className="text-sm font-medium text-white/70 mb-2">{t("settings.wallpaperFit")}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {FIT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleWallpaperFitChange(opt.value)}
+                    className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border text-center cursor-pointer transition-all ${
+                      wallpaperFit === opt.value
+                        ? "border-white/25 bg-white/10 text-white"
+                        : "border-white/8 bg-white/4 text-white/60 hover:border-white/18 hover:text-white"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{opt.label}</span>
+                    <span className="text-[11px] text-white/50">{opt.description}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>

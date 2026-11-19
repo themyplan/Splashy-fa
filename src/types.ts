@@ -9,6 +9,8 @@ export interface AppSettings {
   api_base_url: string;
   /** Page direction: "ltr" (original layout) or "rtl". */
   layout_direction: string;
+  /** Wallpaper fit: "fill" | "fit" | "stretch" | "tile" | "center" | "span". */
+  wallpaper_fit: string;
 }
 
 /// One saved Unsplash API key as returned by `get_api_keys`.
